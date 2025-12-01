@@ -220,3 +220,4 @@ All hooks follow this pattern:
 - **Timeouts:** Action deadlines are set but not enforced (no auto-fold on timeout).
 - **Disconnection handling:** No reconnection logic or sitting out due to disconnect.
 - **Rebuy functionality:** API route exists but UI is not implemented.
+- alwyas use supabase migrations for database updates

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase/server";
 import { z } from "zod";
+import { logApiRoute } from "@/lib/logger";
 
 const createRoomSchema = z
   .object({
@@ -24,8 +25,11 @@ const createRoomSchema = z
   });
 
 export async function POST(request: Request) {
+  const log = logApiRoute("POST", "/api/rooms/create");
+
   try {
     const body = await request.json();
+    log.start({ bodyKeys: Object.keys(body) });
 
     // Validation
     const validatedData = createRoomSchema.parse(body);
@@ -42,8 +46,8 @@ export async function POST(request: Request) {
         bomb_pot_ante: smallBlind * 2, // Default: 2x small blind
         min_buy_in: minBuyIn,
         max_buy_in: maxBuyIn,
-        button_seat: 0, // Start at seat 0
-        max_players: 12,
+        button_seat: null, // Will be set to owner's seat on first deal
+        max_players: 8,
         is_active: true,
         current_hand_number: 0,
       })
@@ -51,19 +55,29 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
-      console.error("Error creating room:", error);
+      log.error(error, { sessionId, smallBlind, bigBlind });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    log.success({
+      roomId: room.id,
+      sessionId,
+      smallBlind,
+      bigBlind,
+      minBuyIn,
+      maxBuyIn,
+    });
 
     return NextResponse.json({ room }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      log.error(error, { validationErrors: error.issues });
       return NextResponse.json(
         { error: error.issues[0].message },
         { status: 400 },
       );
     }
-    console.error("Unexpected error:", error);
+    log.error(error instanceof Error ? error : new Error(String(error)));
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
