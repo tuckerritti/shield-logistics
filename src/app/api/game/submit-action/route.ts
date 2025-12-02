@@ -628,13 +628,16 @@ async function processAction(actionId: string) {
     );
     newSeatsToAct = activePlayers.map((p) => p.seat_number);
     newSeatsActed = [action.seat_number]; // Reset to just the raiser
-    processLogger.info({
-      roomId: action.room_id,
-      raisingSeat: action.seat_number,
-      newBet: newGameCurrentBet,
-      oldBet: gameState.current_bet,
-      reopenedTo: newSeatsToAct,
-    }, "Raise reopened betting");
+    processLogger.info(
+      {
+        roomId: action.room_id,
+        raisingSeat: action.seat_number,
+        newBet: newGameCurrentBet,
+        oldBet: gameState.current_bet,
+        reopenedTo: newSeatsToAct,
+      },
+      "Raise reopened betting",
+    );
   }
 
   // Determine next actor

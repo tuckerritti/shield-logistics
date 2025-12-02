@@ -424,7 +424,10 @@ export default function RoomPage({
       {/* Game Status Messages - Overlays */}
       {gameState && room.pause_after_hand && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 text-center glass px-3 py-2 sm:px-4 sm:py-3 rounded-lg z-20">
-          <p className="text-sm sm:text-base font-semibold text-whiskey-gold" style={{ fontFamily: 'Lato, sans-serif' }}>
+          <p
+            className="text-sm sm:text-base font-semibold text-whiskey-gold"
+            style={{ fontFamily: "Lato, sans-serif" }}
+          >
             ⏸ Pause Scheduled After Hand
           </p>
         </div>

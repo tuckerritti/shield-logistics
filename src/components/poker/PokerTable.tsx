@@ -113,10 +113,12 @@ export function PokerTable({
         return (
           <button
             key={seatNumber}
-            onClick={() => isEmpty && onSeatClick(seatNumber)}
-            disabled={!isEmpty}
+            onClick={() => isEmpty && !userHasSeat && onSeatClick(seatNumber)}
+            disabled={!isEmpty || userHasSeat}
             className={`absolute -translate-x-1/2 -translate-y-1/2 transition-all ${
-              isEmpty ? "cursor-pointer hover:scale-105" : "cursor-default"
+              isEmpty && !userHasSeat
+                ? "cursor-pointer hover:scale-105"
+                : "cursor-default"
             }`}
             style={{
               left: `${position.x}%`,
@@ -126,11 +128,13 @@ export function PokerTable({
             {/* Seat container */}
             <div
               className={`relative z-10 min-w-24 sm:min-w-32 rounded-lg border-2 px-2 py-2 sm:px-4 sm:py-3 shadow-lg backdrop-blur-md ${
-                isEmpty
+                isEmpty && !userHasSeat
                   ? "border-white/20 bg-black/40 hover:border-whiskey-gold/50 hover:bg-black/50"
-                  : isMyPlayer
-                    ? "border-whiskey-gold bg-whiskey-gold/20"
-                    : "border-white/20 bg-black/40"
+                  : isEmpty && userHasSeat
+                    ? "border-white/20 bg-black/40"
+                    : isMyPlayer
+                      ? "border-whiskey-gold bg-whiskey-gold/20"
+                      : "border-white/20 bg-black/40"
               } ${
                 isCurrentActor
                   ? "ring-2 sm:ring-4 ring-whiskey-gold ring-offset-1 sm:ring-offset-2 ring-offset-royal-blue glow-gold"

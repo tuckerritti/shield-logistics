@@ -31,13 +31,16 @@ export function splitPot(
   potSize: number,
   eligibleSeats?: number[],
 ): Winner[] {
-  potLogger.info({
-    totalPlayers: players.length,
-    potSize,
-    boardACards: boardA.length,
-    boardBCards: boardB.length,
-    eligibleSeats: eligibleSeats ?? "all",
-  }, "Splitting pot with hand evaluation");
+  potLogger.info(
+    {
+      totalPlayers: players.length,
+      potSize,
+      boardACards: boardA.length,
+      boardBCards: boardB.length,
+      eligibleSeats: eligibleSeats ?? "all",
+    },
+    "Splitting pot with hand evaluation",
+  );
 
   const activePlayers = players.filter((p) => {
     if (p.hasFolded) return false;
@@ -259,7 +262,7 @@ export function splitPotWithSidePots(
       boardA,
       boardB,
       pot.amount,
-      pot.eligibleSeats
+      pot.eligibleSeats,
     );
 
     allWinners.push(...potWinners);
