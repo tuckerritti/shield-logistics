@@ -44,25 +44,64 @@ export async function POST(
       );
     }
 
-    // Toggle pause state
-    const newPauseState = !room.is_paused;
-    const { data: updatedRoom, error: updateError } = await supabase
-      .from("rooms")
-      .update({ is_paused: newPauseState })
-      .eq("id", roomId)
-      .select()
-      .single();
+    // Check if there's an active hand
+    const { data: gameState } = await supabase
+      .from("game_states")
+      .select("id")
+      .eq("room_id", roomId)
+      .maybeSingle();
 
-    if (updateError) {
-      log.error(updateError, { roomId, sessionId });
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    let updatedRoom;
+    let updateError;
+
+    if (gameState) {
+      // If there's an active hand, toggle pause_after_hand
+      const newPauseAfterHandState = !room.pause_after_hand;
+      const result = await supabase
+        .from("rooms")
+        .update({ pause_after_hand: newPauseAfterHandState })
+        .eq("id", roomId)
+        .select()
+        .single();
+      updatedRoom = result.data;
+      updateError = result.error;
+    } else {
+      // If there's no active hand, toggle is_paused immediately
+      const newPauseState = !room.is_paused;
+      const result = await supabase
+        .from("rooms")
+        .update({
+          is_paused: newPauseState,
+          // Clear pause_after_hand if unpausing
+          pause_after_hand: newPauseState ? room.pause_after_hand : false
+        })
+        .eq("id", roomId)
+        .select()
+        .single();
+      updatedRoom = result.data;
+      updateError = result.error;
     }
 
-    log.info(`Game ${updatedRoom.is_paused ? "paused" : "unpaused"}`, {
-      roomId,
-      sessionId,
-      isPaused: updatedRoom.is_paused,
-    });
+    if (updateError || !updatedRoom) {
+      log.error(updateError || new Error("No room returned"), { roomId, sessionId });
+      return NextResponse.json(
+        { error: updateError?.message || "Failed to update room" },
+        { status: 500 },
+      );
+    }
+
+    log.info(
+      gameState
+        ? `Pause ${updatedRoom.pause_after_hand ? "scheduled after hand" : "canceled"}`
+        : `Game ${updatedRoom.is_paused ? "paused" : "unpaused"}`,
+      {
+        roomId,
+        sessionId,
+        isPaused: updatedRoom.is_paused,
+        pauseAfterHand: updatedRoom.pause_after_hand,
+        hasActiveHand: !!gameState,
+      },
+    );
 
     return NextResponse.json({ room: updatedRoom }, { status: 200 });
   } catch (error) {

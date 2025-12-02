@@ -440,17 +440,23 @@ export default function RoomPage({
             >
               Share
             </button>
-            {isOwner && !gameState && (
+            {isOwner && (
               <button
                 onClick={handleTogglePause}
                 className={`rounded-md px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold border transition-colors ${
-                  room.is_paused
+                  room.is_paused || room.pause_after_hand
                     ? "bg-whiskey-gold text-tokyo-night border-whiskey-gold hover:bg-whiskey-gold/90"
                     : "bg-black/40 text-cream-parchment border-white/10 hover:border-whiskey-gold/50"
                 }`}
                 style={{ fontFamily: "Lato, sans-serif" }}
               >
-                {room.is_paused ? "Unpause" : "Pause"}
+                {room.is_paused
+                  ? "Unpause"
+                  : room.pause_after_hand
+                    ? "⏸ After Hand"
+                    : gameState
+                      ? "Pause After Hand"
+                      : "Pause"}
               </button>
             )}
             {canDeal && (
@@ -494,6 +500,14 @@ export default function RoomPage({
       </div>
 
       {/* Game Status Messages - Overlays */}
+      {gameState && room.pause_after_hand && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 text-center glass px-3 py-2 sm:px-4 sm:py-3 rounded-lg z-20">
+          <p className="text-sm sm:text-base font-semibold text-whiskey-gold" style={{ fontFamily: 'Lato, sans-serif' }}>
+            ⏸ Pause Scheduled After Hand
+          </p>
+        </div>
+      )}
+
       {!gameState && room.is_paused && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center glass px-4 py-3 sm:px-6 sm:py-4 rounded-lg z-20 max-w-sm">
           <p
