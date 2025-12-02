@@ -6,6 +6,7 @@ const evalLogger = createLogger("poker-hand-evaluator");
 export interface HandEvaluation {
   rank: number;
   description: string;
+  hand: string[]; // The actual 5-card hand
 }
 
 // Map hand strength to readable descriptions
@@ -23,9 +24,94 @@ const STRENGTH_DESCRIPTIONS: Record<number, string> = {
   9: "Royal Flush",
 };
 
+// Map rank characters to readable names
+const RANK_NAMES: Record<string, string> = {
+  "2": "2",
+  "3": "3",
+  "4": "4",
+  "5": "5",
+  "6": "6",
+  "7": "7",
+  "8": "8",
+  "9": "9",
+  T: "10",
+  J: "Jack",
+  Q: "Queen",
+  K: "King",
+  A: "Ace",
+};
+
+/**
+ * Creates a detailed description of a poker hand
+ * @param strength - Hand strength (0-9)
+ * @param hand - Array of 5 cards representing the hand
+ * @returns Detailed description like "Two Pair, 7's and 4's"
+ */
+function getDetailedDescription(strength: number, hand: string[]): string {
+  const baseDescription = STRENGTH_DESCRIPTIONS[strength] || "Unknown";
+
+  // Extract ranks from cards (first character of each card string)
+  const ranks = hand.map((card) => card[0]);
+
+  // Count occurrences of each rank
+  const rankCounts = new Map<string, number>();
+  ranks.forEach((rank) => {
+    rankCounts.set(rank, (rankCounts.get(rank) || 0) + 1);
+  });
+
+  // Sort by count (descending) then by rank value (descending for ties)
+  const rankOrder = [
+    "A",
+    "K",
+    "Q",
+    "J",
+    "T",
+    "9",
+    "8",
+    "7",
+    "6",
+    "5",
+    "4",
+    "3",
+    "2",
+  ];
+  const sortedRanks = Array.from(rankCounts.entries()).sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1]; // Sort by count descending
+    return rankOrder.indexOf(a[0]) - rankOrder.indexOf(b[0]); // Sort by rank descending
+  });
+
+  switch (strength) {
+    case 0: // High Card
+      return `${RANK_NAMES[sortedRanks[0][0]]} High`;
+    case 1: // Pair
+      return `Pair of ${RANK_NAMES[sortedRanks[0][0]]}'s`;
+    case 2: // Two Pair
+      return `Two Pair, ${RANK_NAMES[sortedRanks[0][0]]}'s and ${RANK_NAMES[sortedRanks[1][0]]}'s`;
+    case 3: // Three of a Kind
+      return `Three ${RANK_NAMES[sortedRanks[0][0]]}'s`;
+    case 4: // Straight
+      // Find the highest card in the straight
+      const highCard = sortedRanks[0][0];
+      return `Straight, ${RANK_NAMES[highCard]} High`;
+    case 5: // Flush
+      return `Flush, ${RANK_NAMES[sortedRanks[0][0]]} High`;
+    case 6: // Full House
+      return `Full House, ${RANK_NAMES[sortedRanks[0][0]]}'s over ${RANK_NAMES[sortedRanks[1][0]]}'s`;
+    case 7: // Four of a Kind
+      return `Four ${RANK_NAMES[sortedRanks[0][0]]}'s`;
+    case 8: // Straight Flush
+      const sfHighCard = sortedRanks[0][0];
+      return `Straight Flush, ${RANK_NAMES[sfHighCard]} High`;
+    case 9: // Royal Flush
+      return "Royal Flush";
+    default:
+      return baseDescription;
+  }
+}
+
 /**
  * Evaluates PLO hand with partial board (flop or turn)
- * Pads incomplete boards with placeholder cards for evaluation
+ * Evaluates based only on available cards
  *
  * @param holeCards - Player's 4 hole cards
  * @param boardCards - 3, 4, or 5 community cards
@@ -40,17 +126,81 @@ export function evaluatePLOHandPartial(
       { boardCardsCount: boardCards.length },
       "Invalid board - must have 3-5 cards",
     );
-    return { rank: -1, description: "Invalid board" };
+    return { rank: -1, description: "Invalid board", hand: [] };
   }
 
-  // Pad to 5 cards if needed with placeholder cards that don't exist in deck
-  const paddedBoard = [...boardCards];
-  const placeholders = ["Xs", "Xh", "Xd", "Xc", "Xx"];
-  while (paddedBoard.length < 5) {
-    paddedBoard.push(placeholders[paddedBoard.length]);
+  if (holeCards.length !== 4) {
+    evalLogger.error(
+      { holeCardsCount: holeCards.length },
+      "Invalid PLO hand - must have 4 hole cards",
+    );
+    return { rank: Infinity, description: "Invalid hand", hand: [] };
   }
 
-  return evaluatePLOHand(holeCards, paddedBoard);
+  // For partial boards, evaluate all valid combinations with available cards
+  let bestRank = -1;
+  let bestDescription = "";
+  let bestHand: string[] = [];
+
+  // PLO rule: must use exactly 2 from hand, exactly 3 from board
+  // For partial boards (3-4 cards), we evaluate all possible 3-card combinations
+  for (let h1 = 0; h1 < 4; h1++) {
+    for (let h2 = h1 + 1; h2 < 4; h2++) {
+      // Generate all 3-card combinations from available board cards
+      for (let b1 = 0; b1 < boardCards.length; b1++) {
+        for (let b2 = b1 + 1; b2 < boardCards.length; b2++) {
+          for (let b3 = b2 + 1; b3 < boardCards.length; b3++) {
+            const hand = [
+              holeCards[h1],
+              holeCards[h2],
+              boardCards[b1],
+              boardCards[b2],
+              boardCards[b3],
+            ];
+
+            try {
+              // Type assertion needed because hand-evaluator expects specific card type union
+              const result = evaluate({
+                holeCards: hand as unknown as Parameters<
+                  typeof evaluate
+                >[0]["holeCards"],
+              });
+              // Higher strength number = better hand
+              if (result.strength > bestRank) {
+                bestRank = result.strength;
+                bestHand = result.hand as unknown as string[];
+                bestDescription = getDetailedDescription(
+                  result.strength,
+                  bestHand,
+                );
+              }
+            } catch (error) {
+              evalLogger.error(
+                {
+                  hand,
+                  error: error instanceof Error ? error.message : String(error),
+                },
+                "Hand evaluation failed",
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  evalLogger.debug(
+    {
+      holeCards,
+      boardCards,
+      bestRank,
+      bestDescription,
+      bestHand,
+    },
+    "PLO partial hand evaluated",
+  );
+
+  return { rank: bestRank, description: bestDescription, hand: bestHand };
 }
 
 /**
@@ -68,7 +218,7 @@ export function evaluatePLOHand(
       { holeCardsCount: holeCards.length },
       "Invalid PLO hand - must have 4 hole cards",
     );
-    return { rank: Infinity, description: "Invalid hand" };
+    return { rank: Infinity, description: "Invalid hand", hand: [] };
   }
 
   if (boardCards.length !== 5) {
@@ -76,13 +226,14 @@ export function evaluatePLOHand(
       { boardCardsCount: boardCards.length },
       "Invalid board - must have 5 cards",
     );
-    return { rank: Infinity, description: "Invalid board" };
+    return { rank: Infinity, description: "Invalid board", hand: [] };
   }
 
   // PLO rule: must use exactly 2 from hand, 3 from board
   // Try all combinations (C(4,2) * C(5,3) = 6 * 10 = 60 combinations)
   let bestRank = -1;
   let bestDescription = "";
+  let bestHand: string[] = [];
 
   for (let h1 = 0; h1 < 4; h1++) {
     for (let h2 = h1 + 1; h2 < 4; h2++) {
@@ -107,8 +258,11 @@ export function evaluatePLOHand(
               // Higher strength number = better hand
               if (result.strength > bestRank) {
                 bestRank = result.strength;
-                bestDescription =
-                  STRENGTH_DESCRIPTIONS[result.strength] || "Unknown";
+                bestHand = result.hand as unknown as string[];
+                bestDescription = getDetailedDescription(
+                  result.strength,
+                  bestHand,
+                );
               }
             } catch (error) {
               evalLogger.error(
@@ -131,11 +285,12 @@ export function evaluatePLOHand(
       boardCards,
       bestRank,
       bestDescription,
+      bestHand,
     },
     "PLO hand evaluated",
   );
 
-  return { rank: bestRank, description: bestDescription };
+  return { rank: bestRank, description: bestDescription, hand: bestHand };
 }
 
 /**
@@ -149,7 +304,12 @@ export function findBoardWinners(
     hasFolded: boolean;
   }>,
   boardCards: string[],
-): Array<{ seatNumber: number; rank: number; description: string }> {
+): Array<{
+  seatNumber: number;
+  rank: number;
+  description: string;
+  hand: string[];
+}> {
   const activePlayers = players.filter((p) => !p.hasFolded);
 
   if (activePlayers.length === 0) {
