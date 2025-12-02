@@ -232,3 +232,4 @@ All hooks follow this pattern:
 - **Disconnection handling:** No reconnection logic or sitting out due to disconnect.
 - **Rebuy functionality:** API route exists but UI is not implemented.
 - alwyas use supabase migrations for database updates
+- run linter and builder after changes are done, and fix issues

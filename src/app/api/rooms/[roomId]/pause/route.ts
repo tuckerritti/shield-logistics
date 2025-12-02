@@ -73,7 +73,7 @@ export async function POST(
         .update({
           is_paused: newPauseState,
           // Clear pause_after_hand if unpausing
-          pause_after_hand: newPauseState ? room.pause_after_hand : false
+          pause_after_hand: newPauseState ? room.pause_after_hand : false,
         })
         .eq("id", roomId)
         .select()
@@ -83,7 +83,10 @@ export async function POST(
     }
 
     if (updateError || !updatedRoom) {
-      log.error(updateError || new Error("No room returned"), { roomId, sessionId });
+      log.error(updateError || new Error("No room returned"), {
+        roomId,
+        sessionId,
+      });
       return NextResponse.json(
         { error: updateError?.message || "Failed to update room" },
         { status: 500 },
