@@ -32,6 +32,9 @@ export default function RoomPage({
   const [rebuyAmount, setRebuyAmount] = useState(100);
   const [isRebuying, setIsRebuying] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [nextHandCountdown, setNextHandCountdown] = useState<number | null>(
+    null,
+  );
 
   const myPlayer = players.find((p) => p.session_id === sessionId);
   const isMyTurn =
@@ -110,6 +113,69 @@ export default function RoomPage({
       return () => clearTimeout(timer);
     }
   }, [gameState?.phase, handleResolveHand]);
+
+  // Auto-deal next hand after current hand ends
+  useEffect(() => {
+    // Calculate seated players
+    const seatedPlayerCount = players.filter((p) => !p.is_spectating).length;
+    const isOwner = room?.owner_session_id === sessionId;
+
+    // Only auto-deal if:
+    // 1. No active game state (hand just ended)
+    // 2. Not the first hand (current_hand_number > 0)
+    // 3. Game is not paused
+    // 4. Enough players
+    // 5. User is the owner
+    if (
+      !gameState &&
+      room &&
+      (room.current_hand_number ?? 0) > 0 &&
+      !room.is_paused &&
+      seatedPlayerCount >= 2 &&
+      isOwner
+    ) {
+      const delayMs = room.inter_hand_delay || 3000;
+
+      // Show countdown
+      let elapsed = 0;
+      const countdownInterval = setInterval(() => {
+        elapsed += 100;
+        const remaining = Math.ceil((delayMs - elapsed) / 1000);
+        setNextHandCountdown(remaining > 0 ? remaining : null);
+
+        if (elapsed >= delayMs) {
+          clearInterval(countdownInterval);
+          setNextHandCountdown(null);
+        }
+      }, 100);
+
+      // Auto-deal after delay
+      const dealTimer = setTimeout(async () => {
+        try {
+          const response = await fetch("/api/game/deal-hand", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ roomId, sessionId }),
+          });
+
+          if (!response.ok) {
+            const data = await response.json();
+            console.error("Auto-deal failed:", data.error);
+          }
+        } catch (error) {
+          console.error("Auto-deal error:", error);
+        }
+      }, delayMs);
+
+      return () => {
+        clearInterval(countdownInterval);
+        clearTimeout(dealTimer);
+        setNextHandCountdown(null);
+      };
+    } else {
+      setNextHandCountdown(null);
+    }
+  }, [gameState, room, players, roomId, sessionId]);
 
   const handleSeatClick = (seatNumber: number) => {
     // Don't allow sitting if already at the table
@@ -307,7 +373,11 @@ export default function RoomPage({
   const seatedPlayers = players.filter((p) => !p.is_spectating).length;
   const isOwner = room.owner_session_id === sessionId;
   const canDeal =
-    !gameState && seatedPlayers >= 2 && isOwner && !room.is_paused;
+    !gameState &&
+    seatedPlayers >= 2 &&
+    isOwner &&
+    !room.is_paused &&
+    room.current_hand_number === 0; // Only show for first hand
 
   return (
     <div className="h-screen bg-royal-blue flex flex-col overflow-hidden relative">
@@ -397,6 +467,14 @@ export default function RoomPage({
               >
                 Deal Hand
               </button>
+            )}
+            {nextHandCountdown !== null && (
+              <div
+                className="rounded-md bg-black/40 border border-whiskey-gold/50 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold text-whiskey-gold"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                Next hand in {nextHandCountdown}s...
+              </div>
             )}
           </div>
         </div>
