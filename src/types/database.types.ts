@@ -337,6 +337,7 @@ export type Database = {
           current_hand_number: number | null
           game_mode: Database["public"]["Enums"]["game_mode"]
           id: string
+          inter_hand_delay: number
           is_active: boolean | null
           is_paused: boolean
           last_activity_at: string | null
@@ -356,6 +357,7 @@ export type Database = {
           current_hand_number?: number | null
           game_mode?: Database["public"]["Enums"]["game_mode"]
           id?: string
+          inter_hand_delay?: number
           is_active?: boolean | null
           is_paused?: boolean
           last_activity_at?: string | null
@@ -375,6 +377,7 @@ export type Database = {
           current_hand_number?: number | null
           game_mode?: Database["public"]["Enums"]["game_mode"]
           id?: string
+          inter_hand_delay?: number
           is_active?: boolean | null
           is_paused?: boolean
           last_activity_at?: string | null
