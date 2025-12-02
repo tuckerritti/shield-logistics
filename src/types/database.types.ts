@@ -344,6 +344,7 @@ export type Database = {
           max_players: number
           min_buy_in: number
           owner_session_id: string
+          pause_after_hand: boolean
           small_blind: number
           updated_at: string
         }
@@ -362,6 +363,7 @@ export type Database = {
           max_players?: number
           min_buy_in: number
           owner_session_id: string
+          pause_after_hand?: boolean
           small_blind: number
           updated_at?: string
         }
@@ -380,6 +382,7 @@ export type Database = {
           max_players?: number
           min_buy_in?: number
           owner_session_id?: string
+          pause_after_hand?: boolean
           small_blind?: number
           updated_at?: string
         }

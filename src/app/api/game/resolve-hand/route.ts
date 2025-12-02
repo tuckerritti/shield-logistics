@@ -155,6 +155,26 @@ export async function POST(request: Request) {
         // Delete game state
         await supabase.from("game_states").delete().eq("id", gameState.id);
 
+        // Check if pause was scheduled after this hand
+        const { data: room } = await supabase
+          .from("rooms")
+          .select("pause_after_hand")
+          .eq("id", roomId)
+          .single();
+
+        if (room?.pause_after_hand) {
+          // Apply the pause now that the hand is complete
+          await supabase
+            .from("rooms")
+            .update({
+              is_paused: true,
+              pause_after_hand: false,
+            })
+            .eq("id", roomId);
+
+          log.info("Pause applied after hand completion", { roomId });
+        }
+
         return NextResponse.json({
           winners: [winner.seatNumber],
           message: "Hand resolved",
@@ -261,6 +281,26 @@ export async function POST(request: Request) {
 
     // Delete game state to end hand
     await supabase.from("game_states").delete().eq("id", gameState.id);
+
+    // Check if pause was scheduled after this hand
+    const { data: room } = await supabase
+      .from("rooms")
+      .select("pause_after_hand")
+      .eq("id", roomId)
+      .single();
+
+    if (room?.pause_after_hand) {
+      // Apply the pause now that the hand is complete
+      await supabase
+        .from("rooms")
+        .update({
+          is_paused: true,
+          pause_after_hand: false,
+        })
+        .eq("id", roomId);
+
+      log.info("Pause applied after hand completion", { roomId });
+    }
 
     log.success({
       roomId,
