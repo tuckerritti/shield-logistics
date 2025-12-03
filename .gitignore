@@ -133,13 +133,3 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
-
-# Supabase
-.branches
-.temp
-supabase/.branches/
-supabase/.temp/
-**/supabase/.branches/
-**/supabase/.temp/
-supabase/config.toml
-.supabase
