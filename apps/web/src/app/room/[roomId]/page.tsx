@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useSession } from "@/lib/hooks/useSession";
 import { useRoomPlayers } from "@/lib/hooks/useRoomPlayers";
 import { useGameState } from "@/lib/hooks/useGameState";
@@ -9,6 +9,7 @@ import { getBrowserClient } from "@/lib/supabase/client";
 import { ActionPanel } from "@/components/poker/ActionPanel";
 import { PokerTable } from "@/components/poker/PokerTable";
 import type { Room, BoardState } from "@/types/database";
+import { engineFetch, safeEngineUrl } from "@/lib/engineClient";
 
 export default function RoomPage({
   params,
@@ -16,8 +17,8 @@ export default function RoomPage({
   params: Promise<{ roomId: string }>;
 }) {
   const { roomId } = use(params);
-  const { sessionId, isLoading: sessionLoading } = useSession();
-  const { players, loading: playersLoading } = useRoomPlayers(roomId);
+  const { sessionId, accessToken, isLoading: sessionLoading } = useSession();
+  const { players, loading: playersLoading, refetch: refetchPlayers } = useRoomPlayers(roomId);
   const { gameState } = useGameState(roomId);
   const { playerHand } = usePlayerHand(roomId, sessionId);
 
@@ -85,35 +86,6 @@ export default function RoomPage({
     };
   }, [roomId]);
 
-  const handleResolveHand = useCallback(async () => {
-    try {
-      const response = await fetch("/api/game/resolve-hand", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(data.error || "Failed to resolve hand");
-      }
-    } catch (error) {
-      console.error("Error resolving hand:", error);
-      alert("Failed to resolve hand");
-    }
-  }, [roomId]);
-
-  // Auto-resolve showdown after 5 seconds
-  useEffect(() => {
-    if (gameState?.phase === "showdown") {
-      const timer = setTimeout(() => {
-        handleResolveHand();
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [gameState?.phase, handleResolveHand]);
-
   // Auto-deal next hand after current hand ends
   useEffect(() => {
     // Calculate seated players
@@ -152,11 +124,12 @@ export default function RoomPage({
       // Auto-deal after delay
       const dealTimer = setTimeout(async () => {
         try {
-          const response = await fetch("/api/game/deal-hand", {
+          if (!safeEngineUrl()) return;
+          const response = await engineFetch(`/rooms/${roomId}/start-hand`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomId }),
-          });
+            body: JSON.stringify({}),
+          }, accessToken);
 
           if (!response.ok) {
             const data = await response.json();
@@ -175,7 +148,7 @@ export default function RoomPage({
     } else {
       setNextHandCountdown(null);
     }
-  }, [gameState, room, players, roomId, sessionId]);
+  }, [gameState, room, players, roomId, sessionId, accessToken]);
 
   const handleSeatClick = (seatNumber: number) => {
     // Don't allow sitting if already at the table
@@ -193,16 +166,19 @@ export default function RoomPage({
     setIsJoining(true);
 
     try {
-      const response = await fetch(`/api/rooms/${roomId}/join`, {
+      if (!safeEngineUrl()) {
+        alert("Engine URL not configured");
+        return;
+      }
+      const response = await engineFetch(`/rooms/${roomId}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           displayName,
           seatNumber: selectedSeat,
-          buyInAmount,
-          isSpectating: false,
+          buyIn: buyInAmount,
         }),
-      });
+      }, accessToken);
 
       const data = await response.json();
 
@@ -210,6 +186,8 @@ export default function RoomPage({
         setShowJoinModal(false);
         setDisplayName("");
         setSelectedSeat(null);
+        // Refetch players to ensure UI updates immediately
+        await refetchPlayers();
       } else {
         alert(data.error || "Failed to join table");
       }
@@ -227,38 +205,21 @@ export default function RoomPage({
 
     setIsRebuying(true);
 
-    try {
-      const response = await fetch(`/api/players/${myPlayer.id}/rebuy`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: rebuyAmount,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setShowRebuyModal(false);
-        setRebuyAmount(100);
-      } else {
-        alert(data.error || "Failed to rebuy");
-      }
-    } catch (error) {
-      console.error("Error rebuying:", error);
-      alert("Failed to rebuy");
-    } finally {
-      setIsRebuying(false);
-    }
+    alert("Rebuy is not yet supported via the engine.");
+    setIsRebuying(false);
   };
 
   const handleDealHand = async () => {
+    if (!safeEngineUrl()) {
+      alert("Engine URL not configured");
+      return;
+    }
     try {
-      const response = await fetch("/api/game/deal-hand", {
+      const response = await engineFetch(`/rooms/${roomId}/start-hand`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId }),
-      });
+        body: JSON.stringify({}),
+      }, accessToken);
 
       const data = await response.json();
 
@@ -272,38 +233,27 @@ export default function RoomPage({
   };
 
   const handleTogglePause = async () => {
-    try {
-      const response = await fetch(`/api/rooms/${roomId}/pause`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(data.error || "Failed to toggle pause state");
-      }
-    } catch (error) {
-      console.error("Error toggling pause:", error);
-      alert("Failed to toggle pause state");
-    }
+    alert("Pause/unpause is not yet wired to the engine.");
   };
 
   const handleAction = async (actionType: string, amount?: number) => {
     if (!myPlayer) return;
 
+    if (!safeEngineUrl()) {
+      alert("Engine URL not configured");
+      return;
+    }
     try {
-      const response = await fetch("/api/game/submit-action", {
+      const response = await engineFetch(`/rooms/${roomId}/actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          roomId,
           seatNumber: myPlayer.seat_number,
           actionType,
           amount,
+          idempotencyKey: crypto.randomUUID(),
         }),
-      });
+      }, accessToken);
 
       const data = await response.json();
 
@@ -368,7 +318,10 @@ export default function RoomPage({
   }
 
   const seatedPlayers = players.filter((p) => !p.is_spectating).length;
-  const isOwner = room.owner_auth_user_id === sessionId;
+  const isOwner =
+    room.owner_auth_user_id !== null
+      ? room.owner_auth_user_id === sessionId
+      : true; // allow dealing if owner not set
   const canDeal =
     !gameState &&
     seatedPlayers >= 2 &&

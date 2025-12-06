@@ -47,7 +47,7 @@ const GAME_MODES: GameModeConfig[] = [
 
 export default function Home() {
   const router = useRouter();
-  const { sessionId } = useSession();
+  const { sessionId, accessToken } = useSession();
   const [selectedMode, setSelectedMode] =
     useState<GameMode>("double-board-plo");
   const [isCreating, setIsCreating] = useState(false);
@@ -61,6 +61,10 @@ export default function Home() {
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionId) return;
+    if (!process.env.NEXT_PUBLIC_ENGINE_URL) {
+      alert("Engine URL not configured");
+      return;
+    }
 
     const selectedConfig = GAME_MODES.find((mode) => mode.id === selectedMode);
     if (!selectedConfig?.enabled) return;
@@ -68,16 +72,24 @@ export default function Home() {
     setIsCreating(true);
 
     try {
-      const response = await fetch("/api/rooms/create", {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_ENGINE_URL.replace(/\/+$/, "")}/rooms`,
+        {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({
           smallBlind,
           bigBlind,
           minBuyIn,
           maxBuyIn,
+          bombPotAnte: bigBlind * 2, // Bomb pot ante = 2x big blind
+          ownerAuthUserId: sessionId,
         }),
-      });
+        },
+      );
 
       const data = await response.json();
 
