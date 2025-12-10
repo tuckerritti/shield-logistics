@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
-import type { RoomPlayer } from "@/types/database";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import type { HandResult, RoomPlayer } from "@/types/database";
 import { Card } from "./Card";
 import { CommunityCards } from "./CommunityCards";
+import { ChipStack } from "./ChipStack";
+import { ChipFlightLayer, type ChipFlight } from "./ChipFlightLayer";
 
 interface PokerTableProps {
   players: RoomPlayer[];
@@ -14,6 +16,8 @@ interface PokerTableProps {
   boardB?: string[];
   potSize?: number;
   phase?: string;
+  handNumber?: number | null;
+  handResult?: HandResult | null;
   onSeatClick: (seatNumber: number) => void;
 }
 
@@ -28,6 +32,8 @@ export function PokerTable({
   boardB = [],
   potSize = 0,
   phase,
+  handNumber = null,
+  handResult = null,
   onSeatClick,
 }: PokerTableProps) {
   // Detect mobile viewport
@@ -49,6 +55,18 @@ export function PokerTable({
   const tableRotation = isMobile ? 90 : 0;
   // Enlarge felt on mobile only (cards/seats unaffected)
   const tableScale = isMobile ? 1.3 : 1;
+
+  const tableRef = useRef<HTMLDivElement | null>(null);
+  const potRef = useRef<HTMLDivElement | null>(null);
+  const seatRefs = useRef<Map<number, HTMLElement>>(new Map());
+  const betRefs = useRef<Map<number, HTMLElement>>(new Map());
+  const prevPlayersRef = useRef<RoomPlayer[]>([]);
+  const prevPhaseRef = useRef<string | null>(null);
+  const lastHandNumberRef = useRef<number | null>(handNumber);
+  const lastPotRef = useRef<number>(potSize ?? 0);
+  const payoutDoneRef = useRef<Set<number>>(new Set());
+  const [flights, setFlights] = useState<ChipFlight[]>([]);
+  const [displayPot, setDisplayPot] = useState<number>(potSize ?? 0);
 
   // Get seated players (not spectators)
   const seatedPlayers = players.filter((p) => !p.is_spectating);
@@ -81,6 +99,86 @@ export function PokerTable({
     }
   }
 
+  const setSeatRef = (seatNumber: number, el: HTMLElement | null) => {
+    if (el) {
+      seatRefs.current.set(seatNumber, el);
+    } else {
+      seatRefs.current.delete(seatNumber);
+    }
+  };
+
+  const setBetRef = (seatNumber: number, el: HTMLElement | null) => {
+    if (el) {
+      betRefs.current.set(seatNumber, el);
+    } else {
+      betRefs.current.delete(seatNumber);
+    }
+  };
+
+  const getPoint = (el?: HTMLElement | null) => {
+    if (!el || !tableRef.current) return null;
+    const rect = el.getBoundingClientRect();
+    const parentRect = tableRef.current.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2 - parentRect.left,
+      y: rect.top + rect.height / 2 - parentRect.top,
+    };
+  };
+
+  const createFlight = useCallback(
+    (
+      kind: ChipFlight["kind"],
+      amount: number,
+      fromEl?: HTMLElement | null,
+      toEl?: HTMLElement | null,
+      durationMs = 650,
+    ) => {
+      if (!fromEl || !toEl || !tableRef.current || amount <= 0) return;
+      const from = getPoint(fromEl);
+      const to = getPoint(toEl);
+      if (!from || !to) return;
+      setFlights((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          amount: Math.round(amount),
+          from,
+          to,
+          kind,
+          durationMs,
+        },
+      ]);
+    },
+    [],
+  );
+
+  const handleFlightEnd = useCallback((id: string) => {
+    setFlights((prev) => prev.filter((f) => f.id !== id));
+  }, []);
+
+  const winners = useMemo(() => {
+    if (!handResult) return [];
+    const raw = handResult.winners as unknown;
+    if (Array.isArray(raw)) {
+      return raw
+        .map((w) => Number(w))
+        .filter((n) => Number.isFinite(n));
+    }
+    if (typeof raw === "string") {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((w: unknown) => Number(w))
+            .filter((n) => Number.isFinite(n));
+        }
+      } catch (err) {
+        console.error("Failed to parse winners json", err);
+      }
+    }
+    return [];
+  }, [handResult]);
+
   // Calculate seat positions on a flattened "stadium" path so ends feel rounded
   const getSeatPosition = (seatNumber: number) => {
     const angle = (seatNumber / maxPlayers) * 2 * Math.PI - Math.PI / 2;
@@ -104,8 +202,98 @@ export function PokerTable({
     return { x, y };
   };
 
+  // Track hand number to reset payout bookkeeping
+  useEffect(() => {
+    if (handNumber !== null && handNumber !== undefined) {
+      lastHandNumberRef.current = handNumber;
+      payoutDoneRef.current.clear();
+    }
+  }, [handNumber]);
+
+  // Keep a stable pot value while the hand is active; freeze when phase becomes null
+  useEffect(() => {
+    if (phase) {
+      lastPotRef.current = potSize ?? 0;
+      setDisplayPot(potSize ?? 0);
+    }
+  }, [phase, potSize]);
+
+  // Core animation logic: detect bet additions, collections to the pot, and payouts to winners.
+  useEffect(() => {
+    const prevPlayers = prevPlayersRef.current;
+    const prevPhase = prevPhaseRef.current;
+    const phaseChanged = prevPhase !== phase && prevPhase !== null && prevPhase !== undefined;
+    const handEnded = Boolean(prevPhase) && !phase;
+
+    if (!prevPlayers.length) {
+      prevPlayersRef.current = players;
+      prevPhaseRef.current = phase ?? null;
+      return;
+    }
+
+    // Player puts chips forward (bet or raise)
+    players.forEach((player) => {
+      const prev = prevPlayers.find((p) => p.id === player.id);
+      if (!prev) return;
+      const prevBet = prev.current_bet ?? 0;
+      const newBet = player.current_bet ?? 0;
+      const delta = newBet - prevBet;
+      if (delta > 0) {
+        const seatEl = seatRefs.current.get(player.seat_number);
+        const betEl = betRefs.current.get(player.seat_number) ?? seatEl;
+        createFlight("bet", delta, seatEl, betEl, 550);
+      }
+    });
+
+    // Collect tabled bets into the pot when the street advances or the hand ends
+    if (phaseChanged || handEnded) {
+      prevPlayers.forEach((player) => {
+        const outstandingBet = player.current_bet ?? 0;
+        if (outstandingBet > 0) {
+          const betEl = betRefs.current.get(player.seat_number) ?? seatRefs.current.get(player.seat_number);
+          createFlight("collect", outstandingBet, betEl, potRef.current, 620);
+        }
+      });
+    }
+
+    // Payout animation once the hand ends and Supabase writes the hand_result
+    if (handEnded && handResult && handResult.hand_number === lastHandNumberRef.current) {
+      const potAmount = lastPotRef.current || 0;
+      if (potAmount > 0) {
+        setDisplayPot(potAmount);
+      }
+
+      players.forEach((player) => {
+        const prev = prevPlayers.find((p) => p.id === player.id);
+        const stackDelta = (player.chip_stack ?? 0) - (prev?.chip_stack ?? 0);
+        if (
+          stackDelta > 0 &&
+          winners.includes(player.seat_number) &&
+          !payoutDoneRef.current.has(player.seat_number)
+        ) {
+          payoutDoneRef.current.add(player.seat_number);
+          createFlight("payout", stackDelta, potRef.current, seatRefs.current.get(player.seat_number), 720);
+        }
+      });
+
+      prevPlayersRef.current = players;
+      prevPhaseRef.current = phase ?? null;
+      // Fade pot display after payouts animate
+      const timer = setTimeout(() => setDisplayPot(0), 850);
+      return () => clearTimeout(timer);
+    }
+
+    prevPlayersRef.current = players;
+    prevPhaseRef.current = phase ?? null;
+  }, [players, phase, handResult, winners, createFlight]);
+
   return (
-    <div className="relative mx-auto aspect-[3/2] sm:aspect-[4/3] w-full max-w-[100vw] sm:max-w-5xl max-h-[98vh] sm:max-h-none overflow-visible">
+    <div
+      ref={tableRef}
+      className="relative mx-auto aspect-[3/2] sm:aspect-[4/3] w-full max-w-[100vw] sm:max-w-5xl max-h-[98vh] sm:max-h-none overflow-visible"
+    >
+      <ChipFlightLayer flights={flights} onFlightEnd={handleFlightEnd} />
+
       {/* Poker table surface */}
       <div className="absolute inset-0 flex items-center justify-center p-0 sm:p-8">
         <div
@@ -180,6 +368,7 @@ export function PokerTable({
             key={seatNumber}
             onClick={() => isEmpty && !userHasSeat && onSeatClick(seatNumber)}
             disabled={!isEmpty || userHasSeat}
+            ref={(el) => setSeatRef(seatNumber, el)}
             className={`absolute -translate-x-1/2 -translate-y-1/2 transition-all ${
               isEmpty && !userHasSeat
                 ? "cursor-pointer hover:scale-105"
@@ -244,16 +433,19 @@ export function PokerTable({
             </div>
 
             {/* Current bet chips in front of player */}
-            {!isEmpty &&
-              (player.current_bet ?? 0) > 0 &&
-              !player.has_folded && (
-                <div
-                  className="mt-1 sm:mt-2 rounded bg-whiskey-gold px-1.5 sm:px-2 py-0.5 sm:py-1 text-xs font-bold text-tokyo-night shadow-lg"
-                  style={{ fontFamily: "Roboto Mono, monospace" }}
-                >
-                  ${player.current_bet}
-                </div>
+            <div
+              ref={(el) => setBetRef(seatNumber, el)}
+              className="mt-1 sm:mt-2 flex min-h-[18px] flex-col items-center"
+            >
+              {!isEmpty && (player.current_bet ?? 0) > 0 && (
+                <ChipStack
+                  amount={player.current_bet ?? 0}
+                  size={isMobile ? "sm" : "md"}
+                  showValue={true}
+                  compact
+                />
               )}
+            </div>
 
             {/* Dealer button */}
             {hasButton && (
@@ -346,14 +538,18 @@ export function PokerTable({
       {/* Center - Community Cards and Pot */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
         {/* Pot Display (left on desktop, below on mobile) */}
-        <div className="order-2 sm:order-1 glass rounded-lg px-3 sm:px-4 py-1 sm:py-1.5 border border-whiskey-gold/30 shadow-lg">
-          <div className="text-center">
-            <div
-              className="text-base sm:text-xl font-bold text-whiskey-gold glow-gold"
-              style={{ fontFamily: "Roboto Mono, monospace" }}
+        <div
+          ref={potRef}
+          className="order-2 sm:order-1 glass rounded-lg px-3 sm:px-4 py-1.5 border border-whiskey-gold/30 shadow-lg flex items-center"
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className="text-[11px] uppercase tracking-[0.14em] text-cigar-ash"
+              style={{ fontFamily: "Lato, sans-serif" }}
             >
-              ${potSize}
-            </div>
+              Pot
+            </span>
+            <ChipStack amount={displayPot} size={isMobile ? "sm" : "md"} showValue />
           </div>
         </div>
 

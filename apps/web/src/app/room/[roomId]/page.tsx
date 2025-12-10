@@ -5,6 +5,7 @@ import { useSession } from "@/lib/hooks/useSession";
 import { useRoomPlayers } from "@/lib/hooks/useRoomPlayers";
 import { useGameState } from "@/lib/hooks/useGameState";
 import { usePlayerHand } from "@/lib/hooks/usePlayerHand";
+import { useLatestHandResult } from "@/lib/hooks/useLatestHandResult";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { ActionPanel } from "@/components/poker/ActionPanel";
 import { PokerTable } from "@/components/poker/PokerTable";
@@ -21,6 +22,7 @@ export default function RoomPage({
   const { players, loading: playersLoading, refetch: refetchPlayers } = useRoomPlayers(roomId);
   const { gameState } = useGameState(roomId);
   const { playerHand } = usePlayerHand(roomId, sessionId);
+  const { handResult } = useLatestHandResult(roomId);
 
   const [room, setRoom] = useState<Room | null>(null);
   const [roomLoading, setRoomLoading] = useState(true);
@@ -444,6 +446,8 @@ export default function RoomPage({
             boardB={boardB}
             potSize={gameState?.pot_size ?? 0}
             phase={gameState?.phase}
+            handNumber={gameState?.hand_number ?? null}
+            handResult={handResult}
             onSeatClick={handleSeatClick}
           />
         </div>
