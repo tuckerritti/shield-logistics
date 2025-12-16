@@ -4,7 +4,7 @@ import { z } from "zod";
 import { port, corsOrigin } from "./env.js";
 import { logger } from "./logger.js";
 import { supabase } from "./supabase.js";
-import { dealHand, applyAction, endOfHandPayout, determineDoubleBoardWinners, calculateSidePots } from "./logic.js";
+import { dealHand, applyAction, endOfHandPayout, determineDoubleBoardWinners, determineSingleBoardWinners, calculateSidePots } from "./logic.js";
 import type { GameStateRow, Room, RoomPlayer, SidePot } from "./types.js";
 import { ActionType } from "@poker/shared";
 import { fetchGameStateSecret } from "./secrets.js";
@@ -50,6 +50,7 @@ const createRoomSchema = z.object({
   bombPotAnte: z.number().int().min(1, "bombPotAnte must be at least 1"),
   interHandDelay: z.number().int().min(0).optional(),
   pauseAfterHand: z.boolean().optional(),
+  gameMode: z.enum(["double_board_bomb_pot_plo", "texas_holdem"]).optional(),
 });
 
 const joinRoomSchema = z.object({
@@ -104,6 +105,13 @@ app.post("/rooms", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "bigBlind must be greater than smallBlind" });
     }
 
+    const gameMode = payload.gameMode ?? "double_board_bomb_pot_plo";
+
+    // Validate game mode specific constraints
+    if (gameMode === "texas_holdem" && (payload.bombPotAnte ?? 0) > 0) {
+      return res.status(400).json({ error: "Texas Hold'em does not support bomb pot antes" });
+    }
+
     const { data, error } = await supabase
       .from("rooms")
       .insert({
@@ -115,6 +123,7 @@ app.post("/rooms", async (req: Request, res: Response) => {
         bomb_pot_ante: payload.bombPotAnte,
         inter_hand_delay: payload.interHandDelay ?? 5,
         pause_after_hand: payload.pauseAfterHand ?? false,
+        game_mode: gameMode,
         owner_auth_user_id: userId,
         last_activity_at: new Date().toISOString(),
       })
@@ -265,7 +274,7 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
       game_state_id: gs.id,
       deck_seed: deckSeed,
       full_board1: fullBoard1,
-      full_board2: fullBoard2,
+      full_board2: fullBoard2.length > 0 ? fullBoard2 : null,
     });
     if (secretErr) throw secretErr;
 
@@ -438,9 +447,10 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
           },
         ];
       } else {
-        // Determine winners using hand evaluation for double board PLO
+        // Determine winners using hand evaluation
         const board1 = secret.full_board1 || [];
         const board2 = secret.full_board2 || [];
+        const isHoldem = (room as Room).game_mode === "texas_holdem";
 
         const activeHands = (playerHands || [])
           .filter((ph) => activePlayers.some((p) => p.seat_number === ph.seat_number))
@@ -449,15 +459,23 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
             cards: ph.cards as unknown as string[],
           }));
 
-        const { board1Winners, board2Winners } = determineDoubleBoardWinners(
-          activeHands,
-          board1,
-          board2,
-        );
-
         // Reuse side pots from applyAction outcome instead of recalculating
         const sidePots = outcome.updatedGameState.side_pots as SidePot[] ?? calculateSidePots(mergedPlayers);
-        payouts = endOfHandPayout(sidePots, board1Winners, board2Winners);
+
+        if (isHoldem) {
+          // Texas Hold'em: single board winner determination
+          const winners = determineSingleBoardWinners(activeHands, board1);
+          // For Hold'em, distribute entire pot to winners (not split between boards)
+          payouts = endOfHandPayout(sidePots, winners, []);
+        } else {
+          // PLO: double board winner determination
+          const { board1Winners, board2Winners } = determineDoubleBoardWinners(
+            activeHands,
+            board1,
+            board2,
+          );
+          payouts = endOfHandPayout(sidePots, board1Winners, board2Winners);
+        }
       }
 
       if (payouts.length) {
@@ -480,6 +498,28 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         if (creditUpdates.length) {
           const { error: creditErr } = await supabase.from("room_players").upsert(creditUpdates);
           if (creditErr) throw creditErr;
+        }
+
+        // Auto-pause heads-up games when one player busts
+        const finalPlayers = mergedPlayers.map((p) => {
+          const credit = creditUpdates.find((c) => c.id === p.id);
+          return credit ? { ...p, ...credit } : p;
+        });
+        const activeSeated = finalPlayers.filter(
+          (p) => !p.is_spectating && !p.is_sitting_out,
+        );
+        const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
+        const shouldAutoPause = activeSeated.length === 2 && withChips.length === 1;
+        if (shouldAutoPause) {
+          const { error: pauseErr } = await supabase
+            .from("rooms")
+            .update({
+              is_paused: true,
+              pause_after_hand: false,
+              last_activity_at: new Date().toISOString(),
+            })
+            .eq("id", roomId);
+          if (pauseErr) throw pauseErr;
         }
       }
       const boardState = (gameState.board_state ?? null) as

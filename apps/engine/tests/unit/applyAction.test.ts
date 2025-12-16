@@ -1090,11 +1090,13 @@ describe('Apply Action', () => {
       gameState = { ...gameState, ...result.updatedGameState };
 
       // Seat 3 calls full amount
+      // Since players 1 and 2 are all-in, only player 3 has chips left
+      // The hand should fast-forward to complete (no more betting possible)
       ctx = { room: standardRoom, players, gameState, fullBoard1, fullBoard2 };
       result = applyAction(ctx, 3, 'call');
 
-      expect(result.handCompleted).toBe(false);
-      expect(result.updatedGameState.phase).toBe('turn');
+      expect(result.handCompleted).toBe(true);
+      expect(result.updatedGameState.phase).toBe('complete');
       expect(result.updatedGameState.pot_size).toBe(250); // 100 + 50 + 100
       expect(result.updatedGameState.side_pots).toEqual([
         { amount: 150, eligibleSeats: [1, 2, 3] },

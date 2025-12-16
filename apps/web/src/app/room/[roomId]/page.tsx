@@ -322,8 +322,6 @@ export default function RoomPage({
     ? (gameState.side_pots as unknown as Array<{ amount: number; eligibleSeats: number[] }>)
     : [];
 
-  const stakeUnit = room ? room.bomb_pot_ante ?? room.big_blind : 0;
-
   const seatedPlayers = players.filter((p) => !p.is_spectating).length;
   const isOwner =
     room.owner_auth_user_id !== null
@@ -335,6 +333,20 @@ export default function RoomPage({
     isOwner &&
     !room.is_paused &&
     room.current_hand_number === 0; // Only show for first hand
+
+  const gameModeLabel =
+    room?.game_mode === "texas_holdem"
+      ? "Texas Hold'em"
+      : room?.game_mode === "double_board_bomb_pot_plo"
+        ? "Double Board Bomb Pot PLO"
+        : "Loading game...";
+
+  const stakesLabel =
+    room?.game_mode === "texas_holdem"
+      ? `Blinds: ${room.small_blind}/${room.big_blind}`
+      : room
+        ? `Bomb pot ante: ${room.bomb_pot_ante}`
+        : "Loading stakes...";
 
   return (
     <div className="h-screen bg-royal-blue flex flex-col overflow-hidden relative">
@@ -355,13 +367,13 @@ export default function RoomPage({
               className="text-lg sm:text-xl font-bold text-cream-parchment"
               style={{ fontFamily: "Playfair Display, serif" }}
             >
-              Double Board Bomb Pot PLO
+              {gameModeLabel}
             </h1>
             <p
               className="text-xs text-cigar-ash"
               style={{ fontFamily: "Roboto Mono, monospace" }}
             >
-              Ante: {room.bomb_pot_ante}
+              {stakesLabel}
             </p>
             {isOwner && (
               <p
@@ -451,6 +463,7 @@ export default function RoomPage({
             potSize={gameState?.pot_size ?? 0}
             sidePots={sidePots}
             phase={gameState?.phase}
+            gameMode={room.game_mode}
             onSeatClick={handleSeatClick}
           />
         </div>
@@ -523,8 +536,9 @@ export default function RoomPage({
             playerCurrentBet={myPlayer.current_bet ?? 0}
             currentBet={gameState.current_bet ?? 0}
             potSize={gameState.pot_size ?? 0}
-            bigBlind={stakeUnit}
-            lastRaiseAmount={gameState.min_raise ?? stakeUnit}
+            bigBlind={room.big_blind}
+            lastRaiseAmount={gameState.min_raise ?? room.big_blind}
+            gameMode={room.game_mode}
             onAction={handleAction}
           />
         </div>
