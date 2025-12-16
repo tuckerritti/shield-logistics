@@ -232,7 +232,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     phase: initialPhase,
     pot_size: totalPot,
     current_bet: currentBet,
-    min_raise: room.big_blind,
+    min_raise: (room.bomb_pot_ante ?? 0) > 0 ? room.bomb_pot_ante : room.big_blind,
     current_actor_seat: currentActor,
     last_aggressor_seat: null,
     last_raise_amount: null,
