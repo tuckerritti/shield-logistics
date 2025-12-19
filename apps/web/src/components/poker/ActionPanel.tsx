@@ -252,103 +252,98 @@ export function ActionPanel({
 
   return (
     <div
-      className="glass border-t border-whiskey-gold/20 p-3 sm:p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] rounded-t-xl sm:rounded-none max-w-[640px] mx-auto w-full"
+      className="glass border-t border-whiskey-gold/20 p-2 sm:p-3 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] rounded-t-xl sm:rounded-none w-full"
       style={{
         fontFamily: "Lato, sans-serif",
         paddingBottom: "max(env(safe-area-inset-bottom), 0px)",
       }}
     >
-      <div className="mx-auto max-w-full sm:max-w-4xl">
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-          {/* Row 1: Fold + Check/Call */}
-          <div className="grid grid-cols-1 sm:flex sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
-            {/* Fold */}
+      <div className="mx-auto max-w-full sm:max-w-6xl">
+        {/* Desktop: Single compact row layout */}
+        <div className="flex flex-row items-center gap-2 sm:gap-3">
+          {/* Left: Action Buttons (Fold/Check/Call) */}
+          <div className="flex flex-row gap-2 sm:gap-2">
             {limits.canFold && (
               <button
                 onClick={() => handleAction("fold")}
                 disabled={disabled || isSubmitting}
-                className="w-full sm:w-auto rounded-lg bg-velvet-red border border-velvet-red px-6 sm:px-12 py-3 font-bold text-cream-parchment shadow-lg transition-all hover:bg-velvet-red/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
+                className="rounded-lg bg-velvet-red border border-velvet-red px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-cream-parchment shadow-lg transition-all hover:bg-velvet-red/90 disabled:opacity-50"
               >
                 Fold
               </button>
             )}
 
-            {/* Check */}
             {limits.canCheck && (
               <button
                 onClick={() => handleAction("check")}
                 disabled={disabled || isSubmitting}
-                className="w-full sm:w-auto rounded-lg bg-black/40 border border-white/20 px-6 sm:px-12 py-3 font-bold text-cream-parchment shadow-lg transition-all hover:border-whiskey-gold/50 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
+                className="rounded-lg bg-black/40 border border-white/20 px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-cream-parchment shadow-lg transition-all hover:bg-black/60 hover:border-whiskey-gold/50 disabled:opacity-50"
               >
                 Check
               </button>
             )}
 
-            {/* Call */}
             {limits.canCall && !limits.canCheck && (
               <button
                 onClick={() => handleAction("call")}
                 disabled={disabled || isSubmitting}
-                className="w-full sm:w-auto rounded-lg bg-whiskey-gold border border-whiskey-gold px-6 sm:px-12 py-3 font-bold text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
+                className="rounded-lg bg-whiskey-gold border border-whiskey-gold px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 disabled:opacity-50"
                 style={{ fontFamily: "Roboto Mono, monospace" }}
               >
-                Call ${limits.callAmount}
+                <span className="pointer-events-none">Call ${limits.callAmount}</span>
               </button>
             )}
           </div>
 
-          {/* Row 2: Bet/Raise Section */}
+          {/* Center: Bet/Raise Controls */}
           {limits.canRaise && (
-            <div className="flex flex-col sm:flex-row flex-1 gap-2">
-              <div className="flex flex-1 flex-col gap-2">
-                {/* Slider */}
+            <>
+              {/* Quick Bet Buttons */}
+              <div className="hidden sm:flex gap-1.5">
+                <button
+                  onClick={() => handleQuickBet(0.5)}
+                  disabled={disabled || isSubmitting}
+                  className="rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  <span className="pointer-events-none">½ Pot</span>
+                </button>
+                <button
+                  onClick={() => handleQuickBet(0.75)}
+                  disabled={disabled || isSubmitting}
+                  className="rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  <span className="pointer-events-none">¾ Pot</span>
+                </button>
+                <button
+                  onClick={() => handleQuickBet(1)}
+                  disabled={disabled || isSubmitting}
+                  className="rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  <span className="pointer-events-none">Pot</span>
+                </button>
+                <button
+                  onClick={() => setExtraAmount(extraMax)}
+                  disabled={disabled || isSubmitting || playerChips > limits.maxBet}
+                  className="rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  <span className="pointer-events-none">All-In</span>
+                </button>
+              </div>
+
+              {/* Slider + Label */}
+              <div className="flex-1 flex flex-col gap-0.5 min-w-[200px]">
                 <input
                   type="range"
                   min={extraMin}
                   max={extraMax}
                   value={extraAmount}
                   onChange={(e) => setExtraAmount(Number(e.target.value))}
-                  className="w-full accent-whiskey-gold h-8"
+                  className="w-full accent-whiskey-gold h-6"
                   disabled={disabled || isSubmitting}
                 />
-                <div className="text-xs sm:text-sm text-cream-parchment/80 flex flex-wrap justify-between gap-1">
-                  <span className="font-semibold">Adding ${extraAmount}</span>
-                  <span>Total after raise: ${targetTotalBet}</span>
-                </div>
-
-                {/* Quick bet buttons */}
-                <div className="hidden sm:grid sm:grid-cols-4 gap-2">
-                  <button
-                    onClick={() => handleQuickBet(0.5)}
-                    disabled={disabled || isSubmitting}
-                    className="rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
-                  >
-                    1/2 Pot
-                  </button>
-                  <button
-                    onClick={() => handleQuickBet(0.75)}
-                    disabled={disabled || isSubmitting}
-                    className="rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
-                  >
-                    3/4 Pot
-                  </button>
-                  <button
-                    onClick={() => handleQuickBet(1)}
-                    disabled={disabled || isSubmitting}
-                    className="rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
-                  >
-                    Pot
-                  </button>
-                  <button
-                    onClick={() => setExtraAmount(extraMax)}
-                    disabled={
-                      disabled || isSubmitting || playerChips > limits.maxBet
-                    }
-                    className="rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
-                  >
-                    All-In
-                  </button>
+                <div className="text-[10px] sm:text-xs text-cream-parchment/70 flex justify-between">
+                  <span>+${extraAmount}</span>
+                  <span>Total: ${targetTotalBet}</span>
                 </div>
               </div>
 
@@ -366,19 +361,14 @@ export function ActionPanel({
                   targetTotalBet < limits.minBet ||
                   targetTotalBet > limits.maxBet
                 }
-                className="w-full sm:w-auto rounded-lg bg-whiskey-gold border border-whiskey-gold px-6 sm:px-12 py-3 font-bold text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
+                className="rounded-lg bg-whiskey-gold border border-whiskey-gold px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 disabled:opacity-50 whitespace-nowrap"
+                style={{ fontFamily: "Roboto Mono, monospace" }}
               >
-                <div className="text-xs">
-                  {currentBet === 0 ? "Bet" : "Raise"}
-                </div>
-                <div
-                  className="text-lg"
-                  style={{ fontFamily: "Roboto Mono, monospace" }}
-                >
-                  ${targetTotalBet}
-                </div>
+                <span className="pointer-events-none">
+                  {currentBet === 0 ? "Bet" : "Raise"} ${targetTotalBet}
+                </span>
               </button>
-            </div>
+            </>
           )}
 
           {/* All-In (when can't raise normally) */}
@@ -386,10 +376,10 @@ export function ActionPanel({
             <button
               onClick={() => handleAction("all_in")}
               disabled={disabled || isSubmitting}
-              className="w-full sm:w-auto rounded-lg bg-whiskey-gold border border-whiskey-gold px-8 sm:px-12 py-3 font-bold text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
+              className="rounded-lg bg-whiskey-gold border border-whiskey-gold px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 disabled:opacity-50"
               style={{ fontFamily: "Roboto Mono, monospace" }}
             >
-              All-In ${playerChips}
+              <span className="pointer-events-none">All-In ${playerChips}</span>
             </button>
           )}
         </div>
