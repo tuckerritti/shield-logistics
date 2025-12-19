@@ -168,7 +168,10 @@ export function ActionPanel({
   if (limits.canRaise) {
     mobileActions.push({
       key: "raise",
-      label: currentBet === 0 ? `Bet $${targetTotalBet}` : `Raise $${targetTotalBet}`,
+      label:
+        currentBet === 0
+          ? `Bet $${targetTotalBet}`
+          : `Raise $${targetTotalBet}`,
       onClick: () =>
         handleAction(currentBet === 0 ? "bet" : "raise", targetTotalBet),
       disabled:
