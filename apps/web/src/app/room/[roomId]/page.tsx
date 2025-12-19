@@ -10,6 +10,7 @@ import { ActionPanel } from "@/components/poker/ActionPanel";
 import { PokerTable } from "@/components/poker/PokerTable";
 import type { Room, BoardState } from "@/types/database";
 import { engineFetch, safeEngineUrl } from "@/lib/engineClient";
+import { HAND_COMPLETE_DELAY_MS } from "@poker/shared";
 
 export default function RoomPage({
   params,
@@ -43,6 +44,7 @@ export default function RoomPage({
   const [handCompletionCountdown, setHandCompletionCountdown] = useState<
     number | null
   >(null);
+  const [showdownProgress, setShowdownProgress] = useState(1);
 
   const myPlayer = players.find((p) => p.auth_user_id === sessionId);
   const isMyTurn =
@@ -105,7 +107,7 @@ export default function RoomPage({
     ).getTime();
     const now = Date.now();
     const elapsed = now - completedAt;
-    const delayMs = 5000;
+    const delayMs = HAND_COMPLETE_DELAY_MS;
 
     if (elapsed >= delayMs) {
       setHandCompletionCountdown(null);
@@ -127,6 +129,40 @@ export default function RoomPage({
     return () => clearInterval(countdownInterval);
   }, [gameState?.hand_completed_at]);
 
+  // Shrinking progress bar while showdown resolves
+  useEffect(() => {
+    const isShowdownPhase =
+      gameState?.phase === "showdown" || gameState?.phase === "complete";
+
+    if (!isShowdownPhase) {
+      setShowdownProgress(1);
+      return;
+    }
+
+    const durationMs = HAND_COMPLETE_DELAY_MS;
+    const startedAt = gameState?.hand_completed_at
+      ? new Date(gameState.hand_completed_at as string).getTime()
+      : Date.now();
+    const endsAt = startedAt + durationMs;
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const tick = () => {
+      const remaining = endsAt - Date.now();
+      const ratio = Math.max(0, Math.min(1, remaining / durationMs));
+      setShowdownProgress(ratio);
+      if (remaining <= 0) {
+        if (interval) clearInterval(interval);
+      }
+    };
+
+    tick();
+    interval = setInterval(tick, 50);
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [gameState?.phase, gameState?.hand_completed_at]);
+
   // Auto-deal next hand after current hand ends
   useEffect(() => {
     // Calculate seated players
@@ -147,7 +183,7 @@ export default function RoomPage({
       seatedPlayerCount >= 2 &&
       isOwner
     ) {
-      const delayMs = room.inter_hand_delay || 3000;
+      const delayMs = room.inter_hand_delay ?? 0;
 
       // Show countdown
       let elapsed = 0;
@@ -483,6 +519,9 @@ export default function RoomPage({
       ? "Double Board Bomb Pot PLO"
       : "Loading game...";
 
+  const isShowdownPhase =
+    gameState?.phase === "showdown" || gameState?.phase === "complete";
+
   const stakesLabel = room
     ? `Bomb pot ante (BB): ${room.big_blind}`
     : "Loading stakes...";
@@ -610,13 +649,14 @@ export default function RoomPage({
             currentActorSeat={gameState?.current_actor_seat}
             buttonSeat={gameState?.button_seat ?? null}
             boardA={boardA}
-            boardB={boardB}
-            potSize={gameState?.pot_size ?? 0}
-            sidePots={sidePots}
-            phase={gameState?.phase}
-            gameMode={room.game_mode}
-            onSeatClick={handleSeatClick}
-          />
+          boardB={boardB}
+          potSize={gameState?.pot_size ?? 0}
+          sidePots={sidePots}
+          phase={gameState?.phase}
+          gameMode={room.game_mode}
+          showdownProgress={isShowdownPhase ? showdownProgress : null}
+          onSeatClick={handleSeatClick}
+        />
         </div>
       </div>
 
@@ -663,19 +703,16 @@ export default function RoomPage({
       )}
 
       {gameState?.phase === "showdown" && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center glass px-6 py-4 sm:px-8 sm:py-6 rounded-lg z-20 max-w-sm mx-3">
-          <p
-            className="text-xl sm:text-2xl font-bold text-whiskey-gold glow-gold"
-            style={{ fontFamily: "Playfair Display, serif" }}
-          >
-            SHOWDOWN!
-          </p>
-          <p
-            className="text-sm text-cream-parchment mt-2"
-            style={{ fontFamily: "Lato, sans-serif" }}
-          >
-            Determining winners...
-          </p>
+        <div className="absolute top-24 sm:top-28 left-1/2 -translate-x-1/2 z-20 w-[min(90vw,520px)] px-4 pointer-events-none">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-white/10 border border-white/10 shadow-lg backdrop-blur-sm">
+            <div
+              className="h-full bg-whiskey-gold"
+              style={{
+                width: `${Math.max(0, Math.min(1, showdownProgress)) * 100}%`,
+                transition: "width 80ms linear",
+              }}
+            />
+          </div>
         </div>
       )}
 

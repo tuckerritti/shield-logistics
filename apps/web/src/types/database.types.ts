@@ -14,7 +14,7 @@ export type Database = {
           created_at: string
           deck_seed: string
           full_board1: string[]
-          full_board2: string[]
+          full_board2: string[] | null
           game_state_id: string
           id: string
         }
@@ -22,7 +22,7 @@ export type Database = {
           created_at?: string
           deck_seed: string
           full_board1: string[]
-          full_board2: string[]
+          full_board2?: string[] | null
           game_state_id: string
           id?: string
         }
@@ -30,7 +30,7 @@ export type Database = {
           created_at?: string
           deck_seed?: string
           full_board1?: string[]
-          full_board2?: string[]
+          full_board2?: string[] | null
           game_state_id?: string
           id?: string
         }
@@ -347,7 +347,6 @@ export type Database = {
       rooms: {
         Row: {
           big_blind: number
-          bomb_pot_ante: number
           button_seat: number | null
           created_at: string
           current_hand_number: number
@@ -367,7 +366,6 @@ export type Database = {
         }
         Insert: {
           big_blind: number
-          bomb_pot_ante?: number
           button_seat?: number | null
           created_at?: string
           current_hand_number?: number
@@ -387,7 +385,6 @@ export type Database = {
         }
         Update: {
           big_blind?: number
-          bomb_pot_ante?: number
           button_seat?: number | null
           created_at?: string
           current_hand_number?: number
@@ -416,7 +413,7 @@ export type Database = {
     }
     Enums: {
       action_type: "fold" | "check" | "call" | "bet" | "raise" | "all_in"
-      game_mode: "double_board_bomb_pot_plo"
+      game_mode: "double_board_bomb_pot_plo" | "texas_holdem"
       game_phase:
         | "waiting"
         | "dealing"
@@ -425,6 +422,7 @@ export type Database = {
         | "river"
         | "showdown"
         | "complete"
+        | "preflop"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -553,7 +551,7 @@ export const Constants = {
   public: {
     Enums: {
       action_type: ["fold", "check", "call", "bet", "raise", "all_in"],
-      game_mode: ["double_board_bomb_pot_plo"],
+      game_mode: ["double_board_bomb_pot_plo", "texas_holdem"],
       game_phase: [
         "waiting",
         "dealing",
@@ -562,6 +560,7 @@ export const Constants = {
         "river",
         "showdown",
         "complete",
+        "preflop",
       ],
     },
   },

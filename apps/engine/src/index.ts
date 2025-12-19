@@ -15,6 +15,7 @@ import {
 import type { GameStateRow, Room, RoomPlayer, SidePot } from "./types.js";
 import { ActionType } from "@poker/shared";
 import { fetchGameStateSecret } from "./secrets.js";
+import { handCompletionCleanup } from "./cleanup.js";
 
 const app = express();
 app.use(
@@ -674,6 +675,7 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
       if (resultsErr) throw resultsErr;
 
       // Mark hand as completed with timestamp for frontend countdown timer
+      // The cleanup scheduler will delete this game_state after HAND_COMPLETE_DELAY_MS
       const { error: updateErr } = await supabase
         .from("game_states")
         .update({ hand_completed_at: new Date().toISOString() })
@@ -684,26 +686,13 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         throw updateErr;
       }
 
-      // Wait 5 seconds before deleting game state to allow players to chat and see results
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      // Delete game state to trigger hand completion
-      const { error: deleteErr } = await supabase
-        .from("game_states")
-        .delete()
-        .eq("id", gameState.id);
-
-      if (deleteErr) {
-        logger.error({ err: deleteErr }, "failed to delete game_state");
-        throw deleteErr;
-      }
-
       logger.info(
         {
           roomId: room.id,
           handNumber: gameState.hand_number,
+          completedAt: new Date().toISOString(),
         },
-        "hand completed and game_state deleted",
+        "hand marked as completed, cleanup scheduled",
       );
     }
 
@@ -759,4 +748,20 @@ async function fetchLatestGameState(
 
 app.listen(port, () => {
   logger.info(`Engine listening on ${port}`);
+
+  // Start cleanup scheduler for completed hands
+  handCompletionCleanup.start();
+});
+
+// Cleanup on shutdown
+process.on("SIGTERM", () => {
+  logger.info("SIGTERM received, shutting down gracefully");
+  handCompletionCleanup.stop();
+  process.exit(0);
+});
+
+process.on("SIGINT", () => {
+  logger.info("SIGINT received, shutting down gracefully");
+  handCompletionCleanup.stop();
+  process.exit(0);
 });

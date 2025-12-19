@@ -16,6 +16,7 @@ interface PokerTableProps {
   sidePots?: Array<{ amount: number; eligibleSeats: number[] }>;
   phase?: string;
   gameMode?: GameMode;
+  showdownProgress?: number | null;
   onSeatClick: (seatNumber: number) => void;
 }
 
@@ -32,6 +33,7 @@ export function PokerTable({
   sidePots = [],
   phase,
   onSeatClick,
+  showdownProgress = null,
 }: PokerTableProps) {
   // Detect mobile viewport without triggering hydration mismatch
   const subscribeToMobile = useCallback((callback: () => void) => {
@@ -443,13 +445,26 @@ export function PokerTable({
 
         {/* Community Cards */}
         {boardA.length > 0 && phase && (
-          <div className="order-1 sm:order-2 scale-95 sm:scale-100">
+          <div className="order-1 sm:order-2 scale-95 sm:scale-100 flex flex-col items-center gap-3 sm:gap-4">
             <CommunityCards
               boardA={boardA}
               boardB={boardB}
               phase={phase}
               myHoleCards={myHoleCards}
             />
+            {showdownProgress !== null && (
+              <div className="w-full flex justify-center">
+                <div className="w-[min(92vw,360px)] sm:w-[420px] rounded-full bg-white/15 border border-whiskey-gold/30 shadow-lg overflow-hidden backdrop-blur-sm">
+                  <div
+                    className="h-3 bg-whiskey-gold shadow-[0_0_14px_rgba(255,196,90,0.65)]"
+                    style={{
+                      width: `${Math.max(0, Math.min(1, showdownProgress)) * 100}%`,
+                      transition: "width 80ms linear",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
