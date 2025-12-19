@@ -278,7 +278,35 @@ export default function RoomPage({
   };
 
   const handleTogglePause = async () => {
-    alert("Pause/unpause is not yet wired to the engine.");
+    if (!safeEngineUrl()) {
+      alert("Engine URL not configured");
+      return;
+    }
+    try {
+      const response = await engineFetch(`/rooms/${roomId}/pause`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }, accessToken);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Failed to toggle pause");
+        return;
+      }
+
+      // Show feedback for scheduled pause
+      if (data.pauseScheduled) {
+        alert("Game will pause after this hand completes");
+      }
+      // Real-time subscription will update UI automatically
+    } catch (error) {
+      console.error("Error toggling pause:", error);
+      alert("Failed to toggle pause");
+    }
   };
 
   const handleAction = async (actionType: string, amount?: number) => {
