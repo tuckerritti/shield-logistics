@@ -75,6 +75,17 @@ export function PokerTable({
   // Check if current user already has a seat
   const userHasSeat = seatedPlayers.some((p) => p.id === myPlayerId);
 
+  // Determine if we should show side pots separately
+  // Only show side pots if there's an all-in situation
+  const hasAllInPlayers = seatedPlayers.some((p) => p.is_all_in);
+  const shouldShowSidePots = hasAllInPlayers && sidePots.length > 1;
+
+  // Calculate pot display values
+  const mainPotAmount =
+    sidePots.length > 0
+      ? sidePots.reduce((sum, pot) => sum + pot.amount, 0)
+      : potSize;
+
   const rotatePoint = (x: number, y: number, degrees: number) => {
     const rad = (degrees * Math.PI) / 180;
     const cos = Math.cos(rad);
@@ -402,17 +413,16 @@ export function PokerTable({
                 className="text-base sm:text-xl font-bold text-whiskey-gold glow-gold"
                 style={{ fontFamily: "Roboto Mono, monospace" }}
               >
-                ${potSize}
+                ${mainPotAmount}
               </div>
-              {sidePots && sidePots.length > 1 && (
+              {shouldShowSidePots && (
                 <div className="text-xs text-cigar-ash mt-0.5">Main Pot</div>
               )}
             </div>
           </div>
 
-          {/* Side pots */}
-          {sidePots &&
-            sidePots.length > 1 &&
+          {/* Side pots - only show if there's an all-in situation */}
+          {shouldShowSidePots &&
             sidePots.slice(1).map((sidePot, idx) => (
               <div
                 key={idx}

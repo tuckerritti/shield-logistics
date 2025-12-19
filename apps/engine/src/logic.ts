@@ -653,6 +653,7 @@ export function applyAction(
           total_buy_in: p.total_buy_in,
           chip_stack: p.chip_stack,
           current_bet: 0,
+          total_invested_this_hand: p.total_invested_this_hand,
         });
         p.current_bet = 0;
       });

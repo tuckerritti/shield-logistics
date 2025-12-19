@@ -211,5 +211,39 @@ describe("Side Pot Calculation", () => {
         { amount: 10, eligibleSeats: [5] }, // 10 * 1
       ]);
     });
+
+    it("should handle heads-up with unequal blinds before call", () => {
+      // Bug report scenario: SB=5, BB=10, before SB calls
+      const players = [
+        createPlayer({ seat_number: 1, total_invested_this_hand: 5 }), // SB
+        createPlayer({ seat_number: 2, total_invested_this_hand: 10 }), // BB
+      ];
+
+      const pots = calculateSidePots(players);
+
+      // This creates two pots, which is technically correct for payout purposes
+      // but the UI should display side_pots[0] as the main pot, not pot_size
+      expect(pots).toEqual([
+        { amount: 10, eligibleSeats: [1, 2] }, // 5 * 2 players
+        { amount: 5, eligibleSeats: [2] }, // 5 * 1 player (BB's uncalled bet)
+      ]);
+
+      // Total should equal 15 (sum of all side_pots)
+      const total = pots.reduce((sum, pot) => sum + pot.amount, 0);
+      expect(total).toBe(15);
+    });
+
+    it("should handle heads-up after SB calls BB", () => {
+      // After SB calls, both have equal investments
+      const players = [
+        createPlayer({ seat_number: 1, total_invested_this_hand: 10 }), // SB after call
+        createPlayer({ seat_number: 2, total_invested_this_hand: 10 }), // BB
+      ];
+
+      const pots = calculateSidePots(players);
+
+      // Should be a single pot since both invested equally
+      expect(pots).toEqual([{ amount: 20, eligibleSeats: [1, 2] }]);
+    });
   });
 });
