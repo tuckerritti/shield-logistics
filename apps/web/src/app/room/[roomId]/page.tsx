@@ -322,7 +322,8 @@ export default function RoomPage({
     ? (gameState.side_pots as unknown as Array<{ amount: number; eligibleSeats: number[] }>)
     : [];
 
-  const seatedPlayers = players.filter((p) => !p.is_spectating).length;
+  const activePlayers = players.filter((p) => !p.is_spectating);
+  const seatedPlayers = activePlayers.length;
   const isOwner =
     room.owner_auth_user_id !== null
       ? room.owner_auth_user_id === sessionId
@@ -729,6 +730,12 @@ export default function RoomPage({
             </div>
 
             <div className="overflow-x-auto">
+              <p
+                className="mb-2 text-xs text-cigar-ash"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                Total buy-ins are cumulative. Live stack includes chips already committed to the current pot when a hand is running.
+              </p>
               <table className="min-w-full">
                 <thead>
                   <tr className="border-b border-white/10">
@@ -748,19 +755,19 @@ export default function RoomPage({
                       className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-cigar-ash"
                       style={{ fontFamily: "Lato, sans-serif" }}
                     >
-                      Buy-in
+                      Total Buy-ins
                     </th>
                     <th
                       className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-cigar-ash"
                       style={{ fontFamily: "Lato, sans-serif" }}
                     >
-                      Stack (Pre-Hand)
+                      Stack (On Table)
                     </th>
                     <th
                       className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-cigar-ash"
                       style={{ fontFamily: "Lato, sans-serif" }}
                     >
-                      Stack
+                      Live Stack (Incl. Pot)
                     </th>
                     <th
                       className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-cigar-ash"
@@ -771,20 +778,15 @@ export default function RoomPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {players
-                    .filter((p) => !p.is_spectating)
+                  {activePlayers
                     .sort((a, b) => a.seat_number - b.seat_number)
                     .map((player) => {
-                      const investedThisHand =
-                        gameState && player.total_invested_this_hand
-                          ? player.total_invested_this_hand
-                          : 0;
-                      const preHandStack = player.chip_stack + investedThisHand;
-                      const isInCurrentPot = Boolean(
-                        gameState && investedThisHand > 0,
-                      );
-                      const profitLoss =
-                        player.chip_stack - player.total_buy_in;
+                      const investedThisHand = gameState
+                        ? player.total_invested_this_hand ?? 0
+                        : 0;
+                      const liveStack = player.chip_stack + investedThisHand;
+                      const hasMoneyInPot = gameState && investedThisHand > 0;
+                      const profitLoss = liveStack - player.total_buy_in;
                       const isProfit = profitLoss > 0;
                       const isLoss = profitLoss < 0;
                       const isMe = player.id === myPlayer?.id;
@@ -821,18 +823,20 @@ export default function RoomPage({
                             className="whitespace-nowrap px-4 py-3 text-right text-sm text-cream-parchment"
                             style={{ fontFamily: "Roboto Mono, monospace" }}
                           >
-                            ${preHandStack}
-                            {isInCurrentPot && (
-                              <span className="ml-2 rounded-full bg-whiskey-gold/20 px-2 py-0.5 text-[11px] font-semibold text-whiskey-gold align-middle">
-                                In pot: ${investedThisHand}
-                              </span>
-                            )}
+                            ${player.chip_stack}
                           </td>
                           <td
                             className="whitespace-nowrap px-4 py-3 text-right text-sm text-cream-parchment"
                             style={{ fontFamily: "Roboto Mono, monospace" }}
                           >
-                            ${player.chip_stack}
+                            <div className="inline-flex items-center justify-end gap-2 whitespace-nowrap">
+                              <span>${liveStack}</span>
+                              {hasMoneyInPot && (
+                                <span className="rounded-full bg-whiskey-gold/20 px-2 py-0.5 text-[11px] font-semibold text-whiskey-gold align-middle">
+                                  +${investedThisHand} in pot
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td
                             className={`whitespace-nowrap px-4 py-3 text-right text-sm font-semibold ${
@@ -863,42 +867,41 @@ export default function RoomPage({
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
                       style={{ fontFamily: "Roboto Mono, monospace" }}
                     >
-                      $
-                      {players
-                        .filter((p) => !p.is_spectating)
-                        .reduce(
-                          (sum, p) =>
-                            sum +
-                            p.chip_stack +
-                            (gameState && p.total_invested_this_hand
-                              ? p.total_invested_this_hand
-                              : 0),
-                          0,
-                        )}
+                      ${activePlayers.reduce(
+                        (sum, p) => sum + p.total_buy_in,
+                        0,
+                      )}
                     </td>
                     <td
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
                       style={{ fontFamily: "Roboto Mono, monospace" }}
                     >
-                      $
-                      {players
-                        .filter((p) => !p.is_spectating)
-                        .reduce((sum, p) => sum + p.total_buy_in, 0)}
+                      ${activePlayers.reduce((sum, p) => sum + p.chip_stack, 0)}
                     </td>
                     <td
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
                       style={{ fontFamily: "Roboto Mono, monospace" }}
                     >
-                      $
-                      {players
-                        .filter((p) => !p.is_spectating)
-                        .reduce((sum, p) => sum + p.chip_stack, 0)}
+                      ${activePlayers.reduce(
+                        (sum, p) =>
+                          sum +
+                          p.chip_stack +
+                          (gameState ? p.total_invested_this_hand ?? 0 : 0),
+                        0,
+                      )}
                     </td>
                     <td
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
                       style={{ fontFamily: "Roboto Mono, monospace" }}
                     >
-                      $0
+                      ${activePlayers.reduce(
+                        (sum, p) =>
+                          sum +
+                          p.chip_stack +
+                          (gameState ? p.total_invested_this_hand ?? 0 : 0) -
+                          p.total_buy_in,
+                        0,
+                      )}
                     </td>
                   </tr>
                 </tfoot>
