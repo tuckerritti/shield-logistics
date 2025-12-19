@@ -80,12 +80,11 @@ describe("Texas Hold'em", () => {
       expect(result.gameState.pot_size).toBe(15); // SB (5) + BB (10)
       expect(result.gameState.current_bet).toBe(10); // BB amount
 
+      const bbSeat = result.gameState.button_seat;
       const sbPlayer = result.updatedPlayers.find(
-        (p) => p.seat_number === result.gameState.button_seat,
+        (p) => p.seat_number !== bbSeat,
       );
-      const bbPlayer = result.updatedPlayers.find(
-        (p) => p.seat_number !== result.gameState.button_seat,
-      );
+      const bbPlayer = result.updatedPlayers.find((p) => p.seat_number === bbSeat);
 
       expect(sbPlayer?.current_bet).toBe(5);
       expect(bbPlayer?.current_bet).toBe(10);
@@ -125,7 +124,7 @@ describe("Texas Hold'em", () => {
       ).toBeGreaterThan(0);
     });
 
-    it("should set action to button in heads-up preflop", () => {
+    it("should set action to SB in heads-up preflop", () => {
       const players: RoomPlayer[] = [
         createPlayer({ seat_number: 1, chip_stack: 1000 }),
         createPlayer({ seat_number: 2, chip_stack: 1000 }),
@@ -133,9 +132,8 @@ describe("Texas Hold'em", () => {
 
       const result = dealHand(holdemRoom, players);
 
-      // In heads-up, action starts with one of the players
-      expect(result.gameState.current_actor_seat).not.toBeNull();
-      expect([1, 2]).toContain(result.gameState.current_actor_seat!);
+      // In heads-up, action starts with the player after the button (SB)
+      expect(result.gameState.current_actor_seat).toBe(2);
     });
 
     it("should set min_raise to big blind", () => {

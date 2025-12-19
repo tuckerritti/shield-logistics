@@ -66,7 +66,7 @@ export function postBlinds(
 
   const order = actionOrder(activePlayers, buttonSeat);
 
-  // Handle heads-up (2 players): button posts SB, other player posts BB
+  // Handle heads-up (2 players): button posts BB, other player posts SB
   const isHeadsUp = activePlayers.length === 2;
 
   let sbSeat: number | null = null;
@@ -75,9 +75,9 @@ export function postBlinds(
   const updatedPlayers: Partial<RoomPlayer>[] = [];
 
   if (isHeadsUp) {
-    // Heads-up: button is small blind, other player is big blind
-    sbSeat = buttonSeat;
-    bbSeat = order[0]; // First after button
+    // Heads-up: first after button is small blind, button is big blind
+    sbSeat = order[0]; // First after button (wraps)
+    bbSeat = buttonSeat;
   } else {
     // Normal: first after button is SB, second after button is BB
     sbSeat = order[0];

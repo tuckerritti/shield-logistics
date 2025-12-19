@@ -5,7 +5,7 @@ import type { RoomPlayer } from "../../src/types.js";
 
 describe("postBlinds", () => {
   describe("Heads-up (2 players)", () => {
-    it("should post button as small blind and other player as big blind", () => {
+    it("should post button as big blind and other player as small blind", () => {
       const players: RoomPlayer[] = [
         createPlayer({ seat_number: 1, chip_stack: 1000 }),
         createPlayer({ seat_number: 3, chip_stack: 1000 }),
@@ -13,13 +13,13 @@ describe("postBlinds", () => {
 
       const result = postBlinds(players, 1, 5, 10);
 
-      expect(result.sbSeat).toBe(1); // Button is SB in heads-up
-      expect(result.bbSeat).toBe(3); // Other player is BB
+      expect(result.sbSeat).toBe(3); // Player after button is SB
+      expect(result.bbSeat).toBe(1); // Button is BB
       expect(result.currentBet).toBe(10);
       expect(result.totalPosted).toBe(15);
 
-      const sbPlayer = result.updatedPlayers.find((p) => p.seat_number === 1);
-      const bbPlayer = result.updatedPlayers.find((p) => p.seat_number === 3);
+      const sbPlayer = result.updatedPlayers.find((p) => p.seat_number === 3);
+      const bbPlayer = result.updatedPlayers.find((p) => p.seat_number === 1);
 
       expect(sbPlayer?.chip_stack).toBe(995);
       expect(sbPlayer?.current_bet).toBe(5);
@@ -34,17 +34,17 @@ describe("postBlinds", () => {
 
     it("should handle short-stack SB all-in in heads-up", () => {
       const players: RoomPlayer[] = [
-        createPlayer({ seat_number: 1, chip_stack: 3 }), // Button, only 3 chips
-        createPlayer({ seat_number: 2, chip_stack: 1000 }),
+        createPlayer({ seat_number: 1, chip_stack: 1000 }), // Button (BB)
+        createPlayer({ seat_number: 2, chip_stack: 3 }), // SB, only 3 chips
       ];
 
       const result = postBlinds(players, 1, 5, 10);
 
-      expect(result.sbSeat).toBe(1);
-      expect(result.bbSeat).toBe(2);
+      expect(result.sbSeat).toBe(2);
+      expect(result.bbSeat).toBe(1);
       expect(result.totalPosted).toBe(13); // 3 + 10
 
-      const sbPlayer = result.updatedPlayers.find((p) => p.seat_number === 1);
+      const sbPlayer = result.updatedPlayers.find((p) => p.seat_number === 2);
       expect(sbPlayer?.chip_stack).toBe(0);
       expect(sbPlayer?.current_bet).toBe(3); // All-in for 3
       expect(sbPlayer?.is_all_in).toBe(true);
@@ -52,17 +52,17 @@ describe("postBlinds", () => {
 
     it("should handle short-stack BB all-in in heads-up", () => {
       const players: RoomPlayer[] = [
-        createPlayer({ seat_number: 1, chip_stack: 1000 }), // Button
-        createPlayer({ seat_number: 2, chip_stack: 7 }), // Only 7 chips
+        createPlayer({ seat_number: 1, chip_stack: 7 }), // Button (BB) with only 7 chips
+        createPlayer({ seat_number: 2, chip_stack: 1000 }), // SB
       ];
 
       const result = postBlinds(players, 1, 5, 10);
 
-      expect(result.sbSeat).toBe(1);
-      expect(result.bbSeat).toBe(2);
+      expect(result.sbSeat).toBe(2);
+      expect(result.bbSeat).toBe(1);
       expect(result.totalPosted).toBe(12); // 5 + 7
 
-      const bbPlayer = result.updatedPlayers.find((p) => p.seat_number === 2);
+      const bbPlayer = result.updatedPlayers.find((p) => p.seat_number === 1);
       expect(bbPlayer?.chip_stack).toBe(0);
       expect(bbPlayer?.current_bet).toBe(7); // All-in for 7
       expect(bbPlayer?.is_all_in).toBe(true);
@@ -195,8 +195,8 @@ describe("postBlinds", () => {
 
       expect(result.totalPosted).toBe(10); // 3 + 7
 
-      const sbPlayer = result.updatedPlayers.find((p) => p.seat_number === 1);
-      const bbPlayer = result.updatedPlayers.find((p) => p.seat_number === 2);
+      const sbPlayer = result.updatedPlayers.find((p) => p.seat_number === 2);
+      const bbPlayer = result.updatedPlayers.find((p) => p.seat_number === 1);
 
       expect(sbPlayer?.chip_stack).toBe(0);
       expect(sbPlayer?.is_all_in).toBe(true);
@@ -291,8 +291,8 @@ describe("postBlinds", () => {
       expect(result.totalPosted).toBe(3);
       expect(result.currentBet).toBe(2);
 
-      const sbPlayer = result.updatedPlayers.find((p) => p.seat_number === 1);
-      const bbPlayer = result.updatedPlayers.find((p) => p.seat_number === 2);
+      const sbPlayer = result.updatedPlayers.find((p) => p.seat_number === 2);
+      const bbPlayer = result.updatedPlayers.find((p) => p.seat_number === 1);
 
       expect(sbPlayer?.chip_stack).toBe(99);
       expect(bbPlayer?.chip_stack).toBe(98);
