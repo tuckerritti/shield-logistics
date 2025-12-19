@@ -201,12 +201,57 @@ export default function RoomPage({
 
   const handleRebuy = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!myPlayer || !sessionId) return;
+    if (!myPlayer || !accessToken || !roomId) return;
+
+    // Validate rebuy amount
+    if (rebuyAmount <= 0) {
+      alert("Rebuy amount must be positive");
+      return;
+    }
+
+    const maxRebuy = room ? Math.max(0, room.max_buy_in - myPlayer.chip_stack) : 0;
+    if (maxRebuy <= 0) {
+      alert("You're already at the maximum buy-in");
+      return;
+    }
+    if (rebuyAmount > maxRebuy) {
+      alert(`Maximum rebuy amount is $${maxRebuy}`);
+      return;
+    }
 
     setIsRebuying(true);
 
-    alert("Rebuy is not yet supported via the engine.");
-    setIsRebuying(false);
+    try {
+      const response = await engineFetch(
+        `/rooms/${roomId}/rebuy`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            seatNumber: myPlayer.seat_number,
+            rebuyAmount: rebuyAmount,
+          }),
+        },
+        accessToken
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to add chips");
+        return;
+      }
+
+      // Success - close modal and reset
+      setShowRebuyModal(false);
+      setRebuyAmount(100);
+
+      // Real-time subscription will update UI automatically
+    } catch (error) {
+      console.error("Error adding chips:", error);
+      alert("Failed to add chips");
+    } finally {
+      setIsRebuying(false);
+    }
   };
 
   const handleDealHand = async () => {
@@ -322,7 +367,8 @@ export default function RoomPage({
     ? (gameState.side_pots as unknown as Array<{ amount: number; eligibleSeats: number[] }>)
     : [];
 
-  const seatedPlayers = players.filter((p) => !p.is_spectating).length;
+  const activePlayers = players.filter((p) => !p.is_spectating);
+  const seatedPlayers = activePlayers.length;
   const isOwner =
     room.owner_auth_user_id !== null
       ? room.owner_auth_user_id === sessionId
@@ -333,6 +379,10 @@ export default function RoomPage({
     isOwner &&
     !room.is_paused &&
     room.current_hand_number === 0; // Only show for first hand
+  const showActionRail = Boolean(isMyTurn && myPlayer && gameState && room);
+  const layoutRowsClass = showActionRail
+    ? "grid-rows-[auto_1fr_auto]"
+    : "grid-rows-[auto_1fr]";
 
   const gameModeLabel =
     room?.game_mode === "texas_holdem"
@@ -349,7 +399,9 @@ export default function RoomPage({
         : "Loading stakes...";
 
   return (
-    <div className="h-screen bg-royal-blue flex flex-col overflow-hidden relative">
+    <div
+      className={`grid h-[100svh] min-h-[100svh] bg-royal-blue overflow-hidden relative ${layoutRowsClass}`}
+    >
       {/* Vignette Effect */}
       <div
         className="absolute inset-0 pointer-events-none"
@@ -360,34 +412,36 @@ export default function RoomPage({
       />
 
       {/* Header */}
-      <div className="flex-shrink-0 p-2 sm:p-3 relative z-10">
-        <div className="glass rounded-lg p-2 sm:p-3">
-          <div>
-            <h1
-              className="text-lg sm:text-xl font-bold text-cream-parchment"
-              style={{ fontFamily: "Playfair Display, serif" }}
-            >
-              {gameModeLabel}
-            </h1>
-            <p
-              className="text-xs text-cigar-ash"
-              style={{ fontFamily: "Roboto Mono, monospace" }}
-            >
-              {stakesLabel}
-            </p>
-            {isOwner && (
-              <p
-                className="text-xs text-whiskey-gold"
-                style={{ fontFamily: "Lato, sans-serif" }}
+      <div className="relative flex-shrink-0 p-2 sm:p-3 z-10 bg-royal-blue/85 backdrop-blur-xl border-b border-white/5">
+        <div className="glass rounded-lg p-2 sm:p-3 shadow-lg max-w-6xl mx-auto">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex-1 min-w-0 space-y-0.5">
+              <h1
+                className="text-base sm:text-xl font-bold text-cream-parchment"
+                style={{ fontFamily: "Playfair Display, serif" }}
               >
-                You are the table owner
+                {gameModeLabel}
+              </h1>
+              <p
+                className="text-[11px] sm:text-xs text-cigar-ash"
+                style={{ fontFamily: "Roboto Mono, monospace" }}
+              >
+                {stakesLabel}
               </p>
-            )}
+              {isOwner && (
+                <p
+                  className="text-[11px] sm:text-xs text-whiskey-gold"
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
+                  You are the table owner
+                </p>
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2 mt-2 sm:mt-3">
+          <div className="mt-2 sm:mt-3 grid grid-cols-3 sm:flex sm:flex-wrap gap-1.5 sm:gap-2 sm:justify-start">
             <button
               onClick={() => setShowStatsModal(true)}
-              className="rounded-md bg-royal-blue border border-white/10 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm text-cream-parchment hover:border-whiskey-gold/50 transition-colors"
+              className="w-full sm:w-auto rounded-md bg-royal-blue border border-white/10 px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-sm text-cream-parchment hover:border-whiskey-gold/50 transition-colors"
               style={{ fontFamily: "Lato, sans-serif" }}
             >
               Stats
@@ -395,7 +449,7 @@ export default function RoomPage({
             {myPlayer && room && myPlayer.chip_stack < room.max_buy_in && (
               <button
                 onClick={() => setShowRebuyModal(true)}
-                className="rounded-md bg-whiskey-gold px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold text-tokyo-night hover:bg-whiskey-gold/90 transition-colors"
+                className="w-full sm:w-auto rounded-md bg-whiskey-gold px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-sm font-semibold text-tokyo-night hover:bg-whiskey-gold/90 transition-colors"
                 style={{ fontFamily: "Lato, sans-serif" }}
               >
                 Add Chips
@@ -403,7 +457,7 @@ export default function RoomPage({
             )}
             <button
               onClick={copyRoomLink}
-              className="rounded-md bg-black/40 border border-white/10 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm text-cream-parchment hover:border-whiskey-gold/50 transition-colors"
+              className="w-full sm:w-auto rounded-md bg-black/40 border border-white/10 px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-sm text-cream-parchment hover:border-whiskey-gold/50 transition-colors"
               style={{ fontFamily: "Lato, sans-serif" }}
             >
               Share
@@ -411,7 +465,7 @@ export default function RoomPage({
             {isOwner && (
               <button
                 onClick={handleTogglePause}
-                className={`rounded-md px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold border transition-colors ${
+                className={`w-full sm:w-auto rounded-md px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-sm font-semibold border transition-colors ${
                   room.is_paused || room.pause_after_hand
                     ? "bg-whiskey-gold text-tokyo-night border-whiskey-gold hover:bg-whiskey-gold/90"
                     : "bg-black/40 text-cream-parchment border-white/10 hover:border-whiskey-gold/50"
@@ -430,7 +484,7 @@ export default function RoomPage({
             {canDeal && (
               <button
                 onClick={handleDealHand}
-                className="animate-pulse rounded-md bg-whiskey-gold px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-bold text-tokyo-night shadow-lg glow-gold hover:bg-whiskey-gold/90 transition-colors"
+                className="w-full sm:w-auto animate-pulse rounded-md bg-whiskey-gold px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-bold text-tokyo-night shadow-lg glow-gold hover:bg-whiskey-gold/90 transition-colors"
                 style={{ fontFamily: "Lato, sans-serif" }}
               >
                 Deal Hand
@@ -438,7 +492,7 @@ export default function RoomPage({
             )}
             {nextHandCountdown !== null && (
               <div
-                className="rounded-md bg-black/40 border border-whiskey-gold/50 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold text-whiskey-gold"
+                className="w-full sm:w-auto rounded-md bg-black/40 border border-whiskey-gold/50 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold text-whiskey-gold"
                 style={{ fontFamily: "Lato, sans-serif" }}
               >
                 Next hand in {nextHandCountdown}s...
@@ -449,8 +503,8 @@ export default function RoomPage({
       </div>
 
       {/* Main Table Area - fills remaining space */}
-      <div className="flex-1 flex items-center justify-center px-4 pb-4 relative z-10">
-        <div className="w-full h-full max-w-6xl flex items-center justify-center">
+      <div className="relative z-20 flex items-center justify-center px-2 sm:px-4 overflow-visible">
+        <div className="w-full h-full max-w-6xl flex items-center justify-center min-h-[260px]">
           <PokerTable
             players={players}
             maxPlayers={room.max_players}
@@ -471,7 +525,7 @@ export default function RoomPage({
 
       {/* Game Status Messages - Overlays */}
       {gameState && room.pause_after_hand && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 text-center glass px-3 py-2 sm:px-4 sm:py-3 rounded-lg z-20">
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 text-center glass px-3 py-2 sm:px-4 sm:py-3 rounded-lg z-20 mx-3 max-w-[min(90vw,420px)]">
           <p
             className="text-sm sm:text-base font-semibold text-whiskey-gold"
             style={{ fontFamily: "Lato, sans-serif" }}
@@ -482,7 +536,7 @@ export default function RoomPage({
       )}
 
       {!gameState && room.is_paused && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center glass px-4 py-3 sm:px-6 sm:py-4 rounded-lg z-20 max-w-sm">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center glass px-4 py-3 sm:px-6 sm:py-4 rounded-lg z-20 max-w-[min(92vw,460px)] mx-3">
           <p
             className="text-lg sm:text-2xl font-bold text-whiskey-gold glow-gold"
             style={{ fontFamily: "Playfair Display, serif" }}
@@ -501,7 +555,7 @@ export default function RoomPage({
       )}
 
       {!gameState && seatedPlayers < 2 && !room.is_paused && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center glass px-4 py-3 sm:px-6 sm:py-4 rounded-lg z-20 max-w-sm">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center glass px-4 py-3 sm:px-6 sm:py-4 rounded-lg z-20 max-w-[min(92vw,420px)] mx-3">
           <p
             className="text-sm sm:text-lg text-cream-parchment"
             style={{ fontFamily: "Lato, sans-serif" }}
@@ -512,7 +566,7 @@ export default function RoomPage({
       )}
 
       {gameState?.phase === "showdown" && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center glass px-6 py-4 sm:px-8 sm:py-6 rounded-lg z-20 max-w-sm">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center glass px-6 py-4 sm:px-8 sm:py-6 rounded-lg z-20 max-w-sm mx-3">
           <p
             className="text-xl sm:text-2xl font-bold text-whiskey-gold glow-gold"
             style={{ fontFamily: "Playfair Display, serif" }}
@@ -530,7 +584,7 @@ export default function RoomPage({
 
       {/* Action Panel - Fixed at bottom */}
       {isMyTurn && myPlayer && gameState && room && (
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 w-full sm:max-w-5xl sm:mx-auto">
           <ActionPanel
             playerChips={myPlayer.chip_stack}
             playerCurrentBet={myPlayer.current_bet ?? 0}
@@ -729,6 +783,12 @@ export default function RoomPage({
             </div>
 
             <div className="overflow-x-auto">
+              <p
+                className="mb-2 text-xs text-cigar-ash"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                Total buy-ins are cumulative. Live stack includes chips already committed to the current pot when a hand is running.
+              </p>
               <table className="min-w-full">
                 <thead>
                   <tr className="border-b border-white/10">
@@ -748,19 +808,19 @@ export default function RoomPage({
                       className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-cigar-ash"
                       style={{ fontFamily: "Lato, sans-serif" }}
                     >
-                      Buy-in
+                      Total Buy-ins
                     </th>
                     <th
                       className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-cigar-ash"
                       style={{ fontFamily: "Lato, sans-serif" }}
                     >
-                      Stack (Pre-Hand)
+                      Stack (On Table)
                     </th>
                     <th
                       className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-cigar-ash"
                       style={{ fontFamily: "Lato, sans-serif" }}
                     >
-                      Stack
+                      Live Stack (Incl. Pot)
                     </th>
                     <th
                       className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-cigar-ash"
@@ -771,20 +831,15 @@ export default function RoomPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {players
-                    .filter((p) => !p.is_spectating)
+                  {activePlayers
                     .sort((a, b) => a.seat_number - b.seat_number)
                     .map((player) => {
-                      const investedThisHand =
-                        gameState && player.total_invested_this_hand
-                          ? player.total_invested_this_hand
-                          : 0;
-                      const preHandStack = player.chip_stack + investedThisHand;
-                      const isInCurrentPot = Boolean(
-                        gameState && investedThisHand > 0,
-                      );
-                      const profitLoss =
-                        player.chip_stack - player.total_buy_in;
+                      const investedThisHand = gameState
+                        ? player.total_invested_this_hand ?? 0
+                        : 0;
+                      const liveStack = player.chip_stack + investedThisHand;
+                      const hasMoneyInPot = gameState && investedThisHand > 0;
+                      const profitLoss = liveStack - player.total_buy_in;
                       const isProfit = profitLoss > 0;
                       const isLoss = profitLoss < 0;
                       const isMe = player.id === myPlayer?.id;
@@ -821,18 +876,20 @@ export default function RoomPage({
                             className="whitespace-nowrap px-4 py-3 text-right text-sm text-cream-parchment"
                             style={{ fontFamily: "Roboto Mono, monospace" }}
                           >
-                            ${preHandStack}
-                            {isInCurrentPot && (
-                              <span className="ml-2 rounded-full bg-whiskey-gold/20 px-2 py-0.5 text-[11px] font-semibold text-whiskey-gold align-middle">
-                                In pot: ${investedThisHand}
-                              </span>
-                            )}
+                            ${player.chip_stack}
                           </td>
                           <td
                             className="whitespace-nowrap px-4 py-3 text-right text-sm text-cream-parchment"
                             style={{ fontFamily: "Roboto Mono, monospace" }}
                           >
-                            ${player.chip_stack}
+                            <div className="inline-flex items-center justify-end gap-2 whitespace-nowrap">
+                              <span>${liveStack}</span>
+                              {hasMoneyInPot && (
+                                <span className="rounded-full bg-whiskey-gold/20 px-2 py-0.5 text-[11px] font-semibold text-whiskey-gold align-middle">
+                                  +${investedThisHand} in pot
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td
                             className={`whitespace-nowrap px-4 py-3 text-right text-sm font-semibold ${
@@ -863,42 +920,41 @@ export default function RoomPage({
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
                       style={{ fontFamily: "Roboto Mono, monospace" }}
                     >
-                      $
-                      {players
-                        .filter((p) => !p.is_spectating)
-                        .reduce(
-                          (sum, p) =>
-                            sum +
-                            p.chip_stack +
-                            (gameState && p.total_invested_this_hand
-                              ? p.total_invested_this_hand
-                              : 0),
-                          0,
-                        )}
+                      ${activePlayers.reduce(
+                        (sum, p) => sum + p.total_buy_in,
+                        0,
+                      )}
                     </td>
                     <td
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
                       style={{ fontFamily: "Roboto Mono, monospace" }}
                     >
-                      $
-                      {players
-                        .filter((p) => !p.is_spectating)
-                        .reduce((sum, p) => sum + p.total_buy_in, 0)}
+                      ${activePlayers.reduce((sum, p) => sum + p.chip_stack, 0)}
                     </td>
                     <td
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
                       style={{ fontFamily: "Roboto Mono, monospace" }}
                     >
-                      $
-                      {players
-                        .filter((p) => !p.is_spectating)
-                        .reduce((sum, p) => sum + p.chip_stack, 0)}
+                      ${activePlayers.reduce(
+                        (sum, p) =>
+                          sum +
+                          p.chip_stack +
+                          (gameState ? p.total_invested_this_hand ?? 0 : 0),
+                        0,
+                      )}
                     </td>
                     <td
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
                       style={{ fontFamily: "Roboto Mono, monospace" }}
                     >
-                      $0
+                      ${activePlayers.reduce(
+                        (sum, p) =>
+                          sum +
+                          p.chip_stack +
+                          (gameState ? p.total_invested_this_hand ?? 0 : 0) -
+                          p.total_buy_in,
+                        0,
+                      )}
                     </td>
                   </tr>
                 </tfoot>
