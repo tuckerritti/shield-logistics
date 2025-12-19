@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { getBettingLimits } from "@/lib/poker/betting";
 
 interface ActionPanelProps {
@@ -26,19 +32,25 @@ export function ActionPanel({
   onAction,
   disabled = false,
 }: ActionPanelProps) {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.matchMedia("(max-width: 640px)").matches;
-    }
-    return false;
-  });
-
-  useEffect(() => {
+  const subscribeToMobile = useCallback((callback: () => void) => {
+    if (typeof window === "undefined") return () => {};
     const mq = window.matchMedia("(max-width: 640px)");
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
+    mq.addEventListener("change", callback);
+    return () => mq.removeEventListener("change", callback);
   }, []);
+
+  const getMobileSnapshot = useCallback(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 640px)").matches,
+    [],
+  );
+
+  const isMobile = useSyncExternalStore(
+    subscribeToMobile,
+    getMobileSnapshot,
+    () => false,
+  );
 
   // Determine if this is a pot-limit game (PLO) or no-limit game (Hold'em)
   const isPotLimit = gameMode === "double_board_bomb_pot_plo";

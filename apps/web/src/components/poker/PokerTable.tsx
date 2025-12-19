@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import type { GameMode, RoomPlayer } from "@/types/database";
 import { Card } from "./Card";
 import { CommunityCards } from "./CommunityCards";
@@ -34,20 +34,26 @@ export function PokerTable({
   gameMode,
   onSeatClick,
 }: PokerTableProps) {
-  // Detect mobile viewport
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.matchMedia("(max-width: 640px)").matches;
-    }
-    return false;
-  });
-
-  useEffect(() => {
+  // Detect mobile viewport without triggering hydration mismatch
+  const subscribeToMobile = useCallback((callback: () => void) => {
+    if (typeof window === "undefined") return () => {};
     const mediaQuery = window.matchMedia("(max-width: 640px)");
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mediaQuery.addEventListener("change", handler);
-    return () => mediaQuery.removeEventListener("change", handler);
+    mediaQuery.addEventListener("change", callback);
+    return () => mediaQuery.removeEventListener("change", callback);
   }, []);
+
+  const getMobileSnapshot = useCallback(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 640px)").matches,
+    [],
+  );
+
+  const isMobile = useSyncExternalStore(
+    subscribeToMobile,
+    getMobileSnapshot,
+    () => false,
+  );
 
   // Portrait-friendly rectangular table on mobile
   const tableRotation = isMobile ? 0 : 90;
