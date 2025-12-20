@@ -9,7 +9,8 @@ import { getBrowserClient } from "@/lib/supabase/client";
 import { ActionPanel } from "@/components/poker/ActionPanel";
 import { PokerTable } from "@/components/poker/PokerTable";
 import { Card } from "@/components/poker/Card";
-import type { Room, BoardState } from "@/types/database";
+import { GameModeSelector } from "@/components/poker/GameModeSelector";
+import type { Room, BoardState, GameMode } from "@/types/database";
 import { engineFetch, safeEngineUrl } from "@/lib/engineClient";
 import { HAND_COMPLETE_DELAY_MS } from "@poker/shared";
 
@@ -39,7 +40,9 @@ export default function RoomPage({
   const [rebuyAmount, setRebuyAmount] = useState(100);
   const [isRebuying, setIsRebuying] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
-  const [, setNextHandCountdown] = useState<number | null>(null);
+  const [nextHandCountdown, setNextHandCountdown] = useState<number | null>(
+    null,
+  );
   const [, setHandCompletionCountdown] = useState<number | null>(null);
   const [showdownProgress, setShowdownProgress] = useState(1);
   const [showdownTransitionMs, setShowdownTransitionMs] = useState(0);
@@ -215,9 +218,7 @@ export default function RoomPage({
       seatedPlayerCount >= 2 &&
       isOwner
     ) {
-      // Note: Changed from || to ?? to respect explicit 0 value (no delay)
-      // Previously 0 would fallback to 3000ms default
-      const delayMs = room.inter_hand_delay ?? 0;
+      const delayMs = room.inter_hand_delay || 3000;
 
       // Show countdown
       let elapsed = 0;
@@ -435,6 +436,47 @@ export default function RoomPage({
     } catch (error) {
       console.error("Error toggling pause:", error);
       alert("Failed to toggle pause");
+    }
+  };
+
+  const handleGameModeChange = async (newMode: GameMode) => {
+    const targetRoomId = room?.id ?? roomId;
+    if (!targetRoomId) {
+      alert("Room is not loaded yet");
+      return;
+    }
+    if (!accessToken) {
+      alert("You need to be signed in to change the game mode");
+      return;
+    }
+    if (!safeEngineUrl()) {
+      alert("Engine URL not configured");
+      return;
+    }
+    try {
+      const response = await engineFetch(
+        `/rooms/${targetRoomId}/game-mode`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ nextGameMode: newMode }),
+        },
+        accessToken,
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Failed to update game mode");
+        return;
+      }
+
+      // Real-time subscription will update room state automatically
+    } catch (error) {
+      console.error("Failed to update game mode:", error);
+      alert("Failed to update game mode");
     }
   };
 
@@ -767,17 +809,29 @@ export default function RoomPage({
     ? "grid-rows-[auto_1fr_auto]"
     : "grid-rows-[auto_1fr]";
 
-  const gameModeLabel =
-    room?.game_mode === "double_board_bomb_pot_plo"
-      ? "Double Board Bomb Pot PLO"
-      : "Loading game...";
+  const currentGameModeLabel =
+    room?.game_mode === "texas_holdem"
+      ? "Texas Hold'em"
+      : room?.game_mode === "double_board_bomb_pot_plo"
+        ? "Double Board Bomb Pot PLO"
+        : "Loading game...";
+
+  const nextGameModeLabel =
+    room?.next_game_mode === "texas_holdem"
+      ? "Hold'em"
+      : room?.next_game_mode === "double_board_bomb_pot_plo"
+        ? "PLO"
+        : null;
 
   const isShowdownPhase =
     gameState?.phase === "showdown" || gameState?.phase === "complete";
 
-  const stakesLabel = room
-    ? `Bomb pot ante (BB): ${room.big_blind}`
-    : "Loading stakes...";
+  const stakesLabel =
+    room?.game_mode === "texas_holdem"
+      ? `Blinds: ${room.small_blind}/${room.big_blind}`
+      : room
+        ? `Bomb pot ante (BB): ${room.big_blind}`
+        : "Loading stakes...";
 
   return (
     <div
@@ -801,7 +855,13 @@ export default function RoomPage({
                 className="text-base sm:text-xl font-bold text-cream-parchment"
                 style={{ fontFamily: "Playfair Display, serif" }}
               >
-                {gameModeLabel}
+                {currentGameModeLabel}
+                {nextGameModeLabel &&
+                  room?.next_game_mode !== room?.game_mode && (
+                    <span className="ml-2 text-xs text-yellow-400">
+                      → {nextGameModeLabel} next
+                    </span>
+                  )}
               </h1>
               <p
                 className="text-[11px] sm:text-xs text-cigar-ash"
@@ -844,23 +904,33 @@ export default function RoomPage({
               Share
             </button>
             {isOwner && (
-              <button
-                onClick={handleTogglePause}
-                className={`w-full sm:w-auto rounded-md px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-sm font-semibold border transition-colors ${
-                  room.is_paused || room.pause_after_hand
-                    ? "bg-whiskey-gold text-tokyo-night border-whiskey-gold hover:bg-whiskey-gold/90"
-                    : "bg-black/40 text-cream-parchment border-white/10 hover:border-whiskey-gold/50"
-                }`}
-                style={{ fontFamily: "Lato, sans-serif" }}
-              >
-                {room.is_paused
-                  ? "Unpause"
-                  : room.pause_after_hand
-                    ? "⏸ After Hand"
-                    : gameState
-                      ? "Pause After Hand"
-                      : "Pause"}
-              </button>
+              <>
+                <button
+                  onClick={handleTogglePause}
+                  className={`w-full sm:w-auto rounded-md px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-sm font-semibold border transition-colors ${
+                    room.is_paused || room.pause_after_hand
+                      ? "bg-whiskey-gold text-tokyo-night border-whiskey-gold hover:bg-whiskey-gold/90"
+                      : "bg-black/40 text-cream-parchment border-white/10 hover:border-whiskey-gold/50"
+                  }`}
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
+                  {room.is_paused
+                    ? "Unpause"
+                    : room.pause_after_hand
+                      ? "⏸ After Hand"
+                      : gameState
+                        ? "Pause After Hand"
+                        : "Pause"}
+                </button>
+                <div className="col-span-3 sm:col-span-1">
+                  <GameModeSelector
+                    currentMode={room.game_mode}
+                    nextMode={room.next_game_mode}
+                    onChange={handleGameModeChange}
+                    disabled={false}
+                  />
+                </div>
+              </>
             )}
             {canDeal && (
               <button
@@ -870,6 +940,14 @@ export default function RoomPage({
               >
                 Deal Hand
               </button>
+            )}
+            {nextHandCountdown !== null && (
+              <div
+                className="w-full sm:w-auto rounded-md bg-black/40 border border-whiskey-gold/50 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold text-whiskey-gold"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                Next hand in {nextHandCountdown}s...
+              </div>
             )}
           </div>
         </div>

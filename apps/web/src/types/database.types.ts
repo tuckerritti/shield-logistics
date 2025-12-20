@@ -409,68 +409,71 @@ export type Database = {
       }
       rooms: {
         Row: {
-          big_blind: number
-          button_seat: number | null
-          created_at: string
-          current_hand_number: number
-          game_mode: Database["public"]["Enums"]["game_mode"]
-          id: string
-          inter_hand_delay: number
-          is_active: boolean
-          is_paused: boolean
-          last_activity_at: string | null
-          max_buy_in: number
-          max_players: number
-          min_buy_in: number
-          owner_auth_user_id: string | null
-          pause_after_hand: boolean
-          small_blind: number
-          updated_at: string
-          uses_two_decks: boolean
-        }
+          big_blind: number;
+          button_seat: number | null;
+          created_at: string;
+          current_hand_number: number;
+          game_mode: Database["public"]["Enums"]["game_mode"];
+          id: string;
+          inter_hand_delay: number;
+          is_active: boolean;
+          is_paused: boolean;
+          last_activity_at: string | null;
+          max_buy_in: number;
+          max_players: number;
+          min_buy_in: number;
+          next_game_mode: Database["public"]["Enums"]["game_mode"] | null;
+          owner_auth_user_id: string | null;
+          pause_after_hand: boolean;
+          small_blind: number;
+          updated_at: string;
+          uses_two_decks: boolean;
+        };
         Insert: {
-          big_blind: number
-          button_seat?: number | null
-          created_at?: string
-          current_hand_number?: number
-          game_mode?: Database["public"]["Enums"]["game_mode"]
-          id?: string
-          inter_hand_delay?: number
-          is_active?: boolean
-          is_paused?: boolean
-          last_activity_at?: string | null
-          max_buy_in: number
-          max_players?: number
-          min_buy_in: number
-          owner_auth_user_id?: string | null
-          pause_after_hand?: boolean
-          small_blind: number
-          updated_at?: string
-          uses_two_decks?: boolean
-        }
+          big_blind: number;
+          button_seat?: number | null;
+          created_at?: string;
+          current_hand_number?: number;
+          game_mode?: Database["public"]["Enums"]["game_mode"];
+          id?: string;
+          inter_hand_delay?: number;
+          is_active?: boolean;
+          is_paused?: boolean;
+          last_activity_at?: string | null;
+          max_buy_in: number;
+          max_players?: number;
+          min_buy_in: number;
+          next_game_mode?: Database["public"]["Enums"]["game_mode"] | null;
+          owner_auth_user_id?: string | null;
+          pause_after_hand?: boolean;
+          small_blind: number;
+          updated_at?: string;
+          uses_two_decks?: boolean;
+        };
         Update: {
-          big_blind?: number
-          button_seat?: number | null
-          created_at?: string
-          current_hand_number?: number
-          game_mode?: Database["public"]["Enums"]["game_mode"]
-          id?: string
-          inter_hand_delay?: number
-          is_active?: boolean
-          is_paused?: boolean
-          last_activity_at?: string | null
-          max_buy_in?: number
-          max_players?: number
-          min_buy_in?: number
-          owner_auth_user_id?: string | null
-          pause_after_hand?: boolean
-          small_blind?: number
-          updated_at?: string
-          uses_two_decks?: boolean
-        }
-        Relationships: []
-      }
-    }
+          big_blind?: number;
+          button_seat?: number | null;
+          created_at?: string;
+          current_hand_number?: number;
+          game_mode?: Database["public"]["Enums"]["game_mode"];
+          id?: string;
+          inter_hand_delay?: number;
+          is_active?: boolean;
+          is_paused?: boolean;
+          last_activity_at?: string | null;
+          max_buy_in?: number;
+          max_players?: number;
+          min_buy_in?: number;
+          next_game_mode?: Database["public"]["Enums"]["game_mode"] | null;
+          owner_auth_user_id?: string | null;
+          pause_after_hand?: boolean;
+          small_blind?: number;
+          updated_at?: string;
+          uses_two_decks?: boolean;
+        };
+        Relationships: [];
+      };
+    };
     Views: {
       [_ in never]: never
     }

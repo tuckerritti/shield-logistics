@@ -3,6 +3,7 @@ import { ActionType, GameMode, GamePhase } from "@poker/shared";
 export interface Room {
   id: string;
   game_mode: GameMode;
+  next_game_mode: GameMode | null;
   max_players: number;
   min_buy_in: number;
   max_buy_in: number;

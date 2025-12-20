@@ -18,26 +18,8 @@ import {
 import type { GameStateRow, Room, RoomPlayer, SidePot } from "./types.js";
 import { ActionType } from "@poker/shared";
 import { fetchGameStateSecret } from "./secrets.js";
-import { handCompletionCleanup } from "./cleanup.js";
 
 const app = express();
-
-// Track in-flight requests for graceful shutdown
-let activeRequests = 0;
-let isShuttingDown = false;
-
-app.use((req, res, next) => {
-  if (isShuttingDown) {
-    res.status(503).send("Server is shutting down");
-    return;
-  }
-  activeRequests++;
-  res.on("finish", () => {
-    activeRequests--;
-  });
-  next();
-});
-
 app.use(
   cors({
     origin: corsOrigin === "*" ? true : corsOrigin,
@@ -316,6 +298,29 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "A hand is already in progress" });
   }
 
+  // Check for pending game mode switch
+  if (room.next_game_mode && room.next_game_mode !== room.game_mode) {
+    logger.info(
+      `Applying game mode switch: ${room.game_mode} → ${room.next_game_mode}`,
+    );
+
+    // Update game_mode and clear next_game_mode atomically
+    const { error: switchError } = await supabase
+      .from("rooms")
+      .update({
+        game_mode: room.next_game_mode,
+        next_game_mode: null,
+      })
+      .eq("id", roomId);
+
+    if (switchError) {
+      return res.status(500).json({ error: switchError.message });
+    }
+
+    // Update local room object to use new mode
+    room.game_mode = room.next_game_mode;
+  }
+
   const players = await fetchPlayers(roomId);
   if (players.length < 2) {
     return res
@@ -480,6 +485,83 @@ app.patch("/rooms/:roomId/pause", async (req: Request, res: Response) => {
     res.status(500).json({ error: message });
   }
 });
+
+const updateGameModeSchema = z.object({
+  nextGameMode: z.enum(["double_board_bomb_pot_plo", "texas_holdem"]),
+});
+
+app.patch(
+  "/rooms/:roomId/game-mode",
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      // 1. Require authentication
+      const userId = await requireUser(req, res);
+      if (!userId) return;
+
+      // 2. Validate request body
+      const { nextGameMode } = updateGameModeSchema.parse(req.body);
+      const { roomId } = req.params;
+
+      // 3. Fetch current room
+      const { data: room, error: roomError } = await supabase
+        .from("rooms")
+        .select("id, game_mode, next_game_mode, owner_auth_user_id")
+        .eq("id", roomId)
+        .single();
+
+      if (roomError || !room) {
+        res.status(404).json({ error: "Room not found" });
+        return;
+      }
+
+      // 4. Authorization check - only room owner can change game mode
+      if (room.owner_auth_user_id && room.owner_auth_user_id !== userId) {
+        res
+          .status(403)
+          .json({ error: "Only the room owner can change game mode" });
+        return;
+      }
+
+      // 5. Prevent redundant updates
+      if (nextGameMode === room.game_mode) {
+        // Switching to current mode - clear pending if exists
+        await supabase
+          .from("rooms")
+          .update({ next_game_mode: null })
+          .eq("id", roomId);
+
+        res.json({
+          message: "Next game mode cleared (matches current mode)",
+          currentGameMode: room.game_mode,
+          nextGameMode: null,
+        });
+        return;
+      }
+
+      // 6. Update next_game_mode
+      const { error: updateError } = await supabase
+        .from("rooms")
+        .update({ next_game_mode: nextGameMode })
+        .eq("id", roomId);
+
+      if (updateError) {
+        res.status(500).json({ error: updateError.message });
+        return;
+      }
+
+      // 7. Return success
+      res.json({
+        message: "Game mode will change at start of next hand",
+        currentGameMode: room.game_mode,
+        nextGameMode: nextGameMode,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      logger.error({ err }, "failed to update game mode");
+      res.status(400).json({ error: message });
+    }
+  },
+);
 
 app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
   const roomId = req.params.roomId;
@@ -771,28 +853,23 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
       });
       if (resultsErr) throw resultsErr;
 
-      // Mark hand as completed with timestamp for frontend countdown timer
-      // The cleanup scheduler will delete this game_state after HAND_COMPLETE_DELAY_MS
-      const { error: updateErr } = await supabase
+      // Delete game state to trigger hand completion
+      const { error: deleteErr } = await supabase
         .from("game_states")
-        .update({ hand_completed_at: new Date().toISOString() })
+        .delete()
         .eq("id", gameState.id);
 
-      if (updateErr) {
-        logger.error(
-          { err: updateErr },
-          "failed to update game_state with hand_completed_at",
-        );
-        throw updateErr;
+      if (deleteErr) {
+        logger.error({ err: deleteErr }, "failed to delete game_state");
+        throw deleteErr;
       }
 
       logger.info(
         {
           roomId: room.id,
           handNumber: gameState.hand_number,
-          completedAt: new Date().toISOString(),
         },
-        "hand marked as completed, cleanup scheduled",
+        "hand completed and game_state deleted",
       );
     }
 
@@ -1169,43 +1246,11 @@ async function fetchLatestGameState(
   return data as GameStateRow | null;
 }
 
-const server = app.listen(port, () => {
-  logger.info(`Engine listening on ${port}`);
+// Export the Express app so it can be tested without starting a server
+export { app };
 
-  // Start cleanup scheduler for completed hands
-  handCompletionCleanup.start();
-});
-
-// Graceful shutdown handler
-async function gracefulShutdown(signal: string) {
-  logger.info(`${signal} received, starting graceful shutdown`);
-  isShuttingDown = true;
-
-  // Stop accepting new connections
-  server.close(() => {
-    logger.info("HTTP server closed");
+if (process.env.NODE_ENV !== "test") {
+  app.listen(port, () => {
+    logger.info(`Engine listening on ${port}`);
   });
-
-  // Stop cleanup scheduler and wait for in-progress cleanup
-  await handCompletionCleanup.stop();
-
-  // Wait for active requests to complete (with timeout)
-  const maxWaitMs = 10000;
-  const startTime = Date.now();
-  while (activeRequests > 0 && Date.now() - startTime < maxWaitMs) {
-    logger.info(`Waiting for ${activeRequests} active requests to complete...`);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-
-  if (activeRequests > 0) {
-    logger.warn(
-      `Forcing shutdown with ${activeRequests} active requests still pending`,
-    );
-  }
-
-  logger.info("Graceful shutdown complete");
-  process.exit(0);
 }
-
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));

@@ -3,6 +3,7 @@ import type { Room } from "../../src/types.js";
 export const standardRoom: Room = {
   id: "test-room-1",
   game_mode: "double_board_bomb_pot_plo",
+  next_game_mode: null,
   max_players: 9,
   min_buy_in: 100,
   max_buy_in: 1000,
