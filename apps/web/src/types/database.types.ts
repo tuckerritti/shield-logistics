@@ -413,7 +413,7 @@ export type Database = {
     };
     Enums: {
       action_type: "fold" | "check" | "call" | "bet" | "raise" | "all_in";
-      game_mode: "double_board_bomb_pot_plo" | "texas_holdem";
+      game_mode: "double_board_bomb_pot_plo" | "texas_holdem" | "indian_poker";
       game_phase:
         | "waiting"
         | "dealing"
@@ -554,7 +554,7 @@ export const Constants = {
   public: {
     Enums: {
       action_type: ["fold", "check", "call", "bet", "raise", "all_in"],
-      game_mode: ["double_board_bomb_pot_plo", "texas_holdem"],
+      game_mode: ["double_board_bomb_pot_plo", "texas_holdem", "indian_poker"],
       game_phase: [
         "waiting",
         "dealing",

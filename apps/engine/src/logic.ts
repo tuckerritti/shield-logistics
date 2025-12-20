@@ -166,7 +166,8 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   );
 
   const isHoldem = room.game_mode === "texas_holdem";
-  const cardsPerPlayer = isHoldem ? 2 : 4;
+  const isIndianPoker = room.game_mode === "indian_poker";
+  const cardsPerPlayer = isIndianPoker ? 1 : isHoldem ? 2 : 4;
 
   // Deal hole cards
   let cursor = 0;
@@ -177,9 +178,10 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   });
 
   // Deal boards
-  const board1 = deck.slice(cursor, cursor + 5);
-  cursor += 5;
-  const board2 = isHoldem ? [] : deck.slice(cursor, cursor + 5);
+  const board1 = isIndianPoker ? [] : deck.slice(cursor, cursor + 5);
+  cursor += isIndianPoker ? 0 : 5;
+  const board2 =
+    isHoldem || isIndianPoker ? [] : deck.slice(cursor, cursor + 5);
   const buttonSeat = nextButtonSeat(activePlayers, room.button_seat);
   let updatedPlayers: Partial<RoomPlayer>[] = [];
   let totalPot = 0;
@@ -249,9 +251,17 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   }
 
   const initialPhase = isHoldem ? "preflop" : "flop";
-  const initialBoardState = isHoldem
-    ? { board1: [], board2: [] } // No cards shown preflop
-    : { board1: board1.slice(0, 3), board2: board2.slice(0, 3) }; // Show 3 cards on flop for PLO
+  const initialBoardState = isIndianPoker
+    ? {
+        board1: [],
+        board2: [],
+        visible_player_cards: Object.fromEntries(
+          playerHands.map((h) => [h.seat_number.toString(), h.cards]),
+        ),
+      } // Indian Poker: no boards, but show all players' cards (clients will hide their own)
+    : isHoldem
+      ? { board1: [], board2: [] } // No cards shown preflop
+      : { board1: board1.slice(0, 3), board2: board2.slice(0, 3) }; // Show 3 cards on flop for PLO
 
   const gameState: Partial<GameStateRow> = {
     room_id: room.id,
@@ -599,6 +609,31 @@ export function applyAction(
 
     // Debug aid for street-closing logic; keep disabled in production
     // console.log('street-closure', { nonAllInCount, awaiting, allBetsEqual });
+
+    const isIndianPoker = room.game_mode === "indian_poker";
+
+    // Indian Poker: single betting round only, go straight to complete
+    if (isIndianPoker) {
+      const calculatedSidePotsFinal = calculateSidePots(
+        activeNonFoldedPlayers as RoomPlayer[],
+      );
+
+      return {
+        updatedGameState: {
+          phase: "complete",
+          current_actor_seat: null,
+          seats_to_act: [],
+          seats_acted: activeSeats,
+          action_history: [...actionHistory],
+          current_bet: currentBet,
+          pot_size: pot,
+          board_state: boardState, // Keep visible_player_cards unchanged
+          side_pots: calculatedSidePotsFinal,
+        },
+        updatedPlayers,
+        handCompleted: true,
+      };
+    }
 
     // If no more betting action is possible (0 or 1 non-all-in players remaining),
     // fast-forward to showdown/complete and reveal all community cards.
@@ -1105,4 +1140,45 @@ export function endOfHandPayout(
     seat,
     amount,
   }));
+}
+
+/**
+ * Get rank value for high-card comparison in Indian Poker
+ * @param card Card string (e.g., "Ah", "Kd")
+ * @returns Rank value (0-12, where 2=0 and A=12)
+ */
+function cardRankValue(card: string): number {
+  const rank = card[0];
+  const rankOrder = "23456789TJQKA";
+  return rankOrder.indexOf(rank);
+}
+
+/**
+ * Determine winners in Indian Poker (single card high-card comparison)
+ * @param hands Array of player hands with seat numbers and cards
+ * @returns Array of winning seat numbers
+ */
+export function determineIndianPokerWinners(
+  hands: Array<{ seatNumber: number; cards: string[] }>,
+): number[] {
+  if (hands.length === 0) return [];
+
+  // Find highest card rank
+  let maxRank = -1;
+  const winners: number[] = [];
+
+  for (const hand of hands) {
+    const card = hand.cards[0];
+    const rankValue = cardRankValue(card);
+
+    if (rankValue > maxRank) {
+      maxRank = rankValue;
+      winners.length = 0; // Clear previous winners
+      winners.push(hand.seatNumber);
+    } else if (rankValue === maxRank) {
+      winners.push(hand.seatNumber); // Tie
+    }
+  }
+
+  return winners;
 }
