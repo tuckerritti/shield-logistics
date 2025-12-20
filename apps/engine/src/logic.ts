@@ -49,6 +49,37 @@ export function actionOrder(
   return [...afterButton, ...beforeButton];
 }
 
+/**
+ * Convert player hands to visible cards map for Indian Poker during active play
+ * Excludes each player's own card for security (client should not see own card)
+ * @param playerHands Array of player hands with seat numbers and cards
+ * @returns Map of seat number to visible cards (other players' cards only)
+ */
+export function getVisibleCardsForActivePlayers(
+  playerHands: Array<{ seat_number: number; cards: string[] }>,
+): Record<string, string[]> {
+  // During active play, each player sees all OTHER players' cards
+  // For now, show all cards - frontend will filter own card
+  // TODO: Implement per-player filtering on server side for enhanced security
+  return Object.fromEntries(
+    playerHands.map((h) => [h.seat_number.toString(), h.cards]),
+  );
+}
+
+/**
+ * Convert all player hands to visible cards map for Indian Poker at showdown
+ * Shows all cards including each player's own card
+ * @param playerHands Array of player hands with seat numbers and cards
+ * @returns Map of seat number to visible cards (all cards visible)
+ */
+export function revealAllCardsAtShowdown(
+  playerHands: Array<{ seat_number: number; cards: string[] }>,
+): Record<string, string[]> {
+  return Object.fromEntries(
+    playerHands.map((h) => [h.seat_number.toString(), h.cards]),
+  );
+}
+
 interface BlindPostingResult {
   updatedPlayers: Partial<RoomPlayer>[];
   totalPosted: number;
@@ -169,6 +200,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
 
   // Determine game mode configuration
   const isHoldem = room.game_mode === "texas_holdem";
+  const isIndianPoker = room.game_mode === "indian_poker";
   const is321 = room.game_mode === "game_mode_321";
 
   let cardsPerPlayer: number;
@@ -177,6 +209,9 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   if (is321) {
     cardsPerPlayer = 6;
     totalBoardCards = 15; // 3 boards × 5 cards
+  } else if (isIndianPoker) {
+    cardsPerPlayer = 1;
+    totalBoardCards = 0; // No boards for Indian Poker
   } else if (isHoldem) {
     cardsPerPlayer = 2;
     totalBoardCards = 5;
@@ -203,8 +238,8 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   });
 
   // Deal boards
-  const board1 = deck.slice(cursor, cursor + 5);
-  cursor += 5;
+  const board1 = isIndianPoker ? [] : deck.slice(cursor, cursor + 5);
+  cursor += isIndianPoker ? 0 : 5;
   let board2: string[];
   let board3: string[] | undefined;
 
@@ -212,12 +247,11 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     board2 = deck.slice(cursor, cursor + 5);
     cursor += 5;
     board3 = deck.slice(cursor, cursor + 5);
-  } else if (isHoldem) {
+  } else if (isHoldem || isIndianPoker) {
     board2 = [];
   } else {
     board2 = deck.slice(cursor, cursor + 5);
   }
-
   const buttonSeat = nextButtonSeat(activePlayers, room.button_seat);
   let updatedPlayers: Partial<RoomPlayer>[] = [];
   let totalPot = 0;
@@ -254,7 +288,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
           );
     currentActor = seatsToAct[0] ?? null;
   } else {
-    // Post antes for PLO bomb pot: big blind value is the ante
+    // Post antes for PLO/Indian Poker bomb pots: big blind value is the ante
     const ante = room.big_blind;
     updatedPlayers = activePlayers.map((p) => {
       const antePaid = Math.min(p.chip_stack, ante);
@@ -290,7 +324,13 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
 
   // Build board state based on game mode
   let initialBoardState: any;
-  if (isHoldem) {
+  if (isIndianPoker) {
+    initialBoardState = {
+      board1: [],
+      board2: [],
+      visible_player_cards: getVisibleCardsForActivePlayers(playerHands),
+    }; // Indian Poker: all cards visible during active play, frontend filters own card
+  } else if (isHoldem) {
     initialBoardState = { board1: [], board2: [] }; // No cards shown preflop
   } else if (is321) {
     initialBoardState = {
@@ -346,6 +386,7 @@ export interface ActionContext {
   fullBoard1: string[];
   fullBoard2: string[];
   fullBoard3?: string[];  // For 321 mode
+  playerHands?: Array<{ seat_number: number; cards: string[] }>; // Optional: only needed for Indian Poker showdown
 }
 
 export interface ActionOutcome {
@@ -654,6 +695,39 @@ export function applyAction(
 
     // Debug aid for street-closing logic; keep disabled in production
     // console.log('street-closure', { nonAllInCount, awaiting, allBetsEqual });
+
+    const isIndianPoker = room.game_mode === "indian_poker";
+
+    // Indian Poker: single betting round only, go straight to complete
+    if (isIndianPoker) {
+      const calculatedSidePotsFinal = calculateSidePots(
+        activeNonFoldedPlayers as RoomPlayer[],
+      );
+
+      // SECURITY: Reveal all player cards at showdown
+      const updatedBoardState = {
+        ...boardState,
+        visible_player_cards: ctx.playerHands
+          ? revealAllCardsAtShowdown(ctx.playerHands)
+          : {},
+      };
+
+      return {
+        updatedGameState: {
+          phase: "complete",
+          current_actor_seat: null,
+          seats_to_act: [],
+          seats_acted: activeSeats,
+          action_history: [...actionHistory],
+          current_bet: currentBet,
+          pot_size: pot,
+          board_state: updatedBoardState,
+          side_pots: calculatedSidePotsFinal,
+        },
+        updatedPlayers,
+        handCompleted: true,
+      };
+    }
 
     // If no more betting action is possible (0 or 1 non-all-in players remaining),
     // fast-forward to showdown/complete and reveal all community cards.
@@ -1336,6 +1410,7 @@ export function endOfHandPayout(
 }
 
 /**
+<<<<<<< HEAD
  * Distribute pot for 321 mode (3-way split)
  * Each board gets 1/3 of each pot. Scoop = player wins all 3 boards.
  */
@@ -1399,4 +1474,56 @@ export function endOfHandPayout321(
     seat,
     amount,
   }));
+}
+
+/**
+ * Get rank value for high-card comparison in Indian Poker
+ * @param card Card string (e.g., "Ah", "Kd")
+ * @returns Rank value (0-12, where 2=0 and A=12)
+ * @throws Error if card rank is invalid
+ */
+function cardRankValue(card: string): number {
+  const rank = card[0];
+  const rankOrder = "23456789TJQKA";
+  const index = rankOrder.indexOf(rank);
+  if (index === -1) {
+    throw new Error(`Invalid card rank: ${rank} in card ${card}`);
+  }
+  return index;
+}
+
+/**
+ * Determine winners in Indian Poker (single card high-card comparison)
+ * @param hands Array of player hands with seat numbers and cards
+ * @returns Array of winning seat numbers
+ */
+export function determineIndianPokerWinners(
+  hands: Array<{ seatNumber: number; cards: string[] }>,
+): number[] {
+  if (hands.length === 0) return [];
+
+  // Find highest card rank
+  let maxRank = -1;
+  const winners: number[] = [];
+
+  for (const hand of hands) {
+    // Validate hand has cards before accessing
+    if (!hand.cards || hand.cards.length === 0) {
+      console.warn(`Player at seat ${hand.seatNumber} has no cards, skipping`);
+      continue;
+    }
+
+    const card = hand.cards[0];
+    const rankValue = cardRankValue(card);
+
+    if (rankValue > maxRank) {
+      maxRank = rankValue;
+      winners.length = 0; // Clear previous winners
+      winners.push(hand.seatNumber);
+    } else if (rankValue === maxRank) {
+      winners.push(hand.seatNumber); // Tie
+    }
+  }
+
+  return winners;
 }
