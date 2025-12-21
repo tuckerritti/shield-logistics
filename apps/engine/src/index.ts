@@ -509,7 +509,13 @@ app.patch(
         .eq("id", roomId)
         .single();
 
-      if (roomError || !room) {
+      if (roomError) {
+        logger.error({ err: roomError, roomId }, "failed to fetch room");
+        res.status(500).json({ error: roomError.message });
+        return;
+      }
+
+      if (!room) {
         res.status(404).json({ error: "Room not found" });
         return;
       }
