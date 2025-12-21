@@ -1,7 +1,7 @@
 export const sharedVersion = "0.0.0";
 
 // Constants
-export { HAND_COMPLETE_DELAY_MS } from "./constants";
+export { HAND_COMPLETE_DELAY_MS, HAND_COMPLETE_DELAY_321_MS } from "./constants";
 
 // Supabase enum mirrors
 export const ACTION_TYPES = [
@@ -90,4 +90,9 @@ export interface BoardState {
   board1?: string[];
   board2?: string[];
   board3?: string[];  // For 321 mode
+  player_partitions?: Record<string, {
+    threeBoardCards: string[];
+    twoBoardCards: string[];
+    oneBoardCard: string[];
+  }>;
 }

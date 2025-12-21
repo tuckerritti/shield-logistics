@@ -15,6 +15,7 @@ export type Database = {
           deck_seed: string
           full_board1: string[]
           full_board2: string[] | null
+          full_board3: string[] | null
           game_state_id: string
           id: string
         }
@@ -23,6 +24,7 @@ export type Database = {
           deck_seed: string
           full_board1: string[]
           full_board2?: string[] | null
+          full_board3?: string[] | null
           game_state_id: string
           id?: string
         }
@@ -31,6 +33,7 @@ export type Database = {
           deck_seed?: string
           full_board1?: string[]
           full_board2?: string[] | null
+          full_board3?: string[] | null
           game_state_id?: string
           id?: string
         }
@@ -135,6 +138,7 @@ export type Database = {
           action_history: Json | null
           board_a: string[] | null
           board_b: string[] | null
+          board_c: string[] | null
           created_at: string
           final_pot: number
           hand_number: number
@@ -147,6 +151,7 @@ export type Database = {
           action_history?: Json | null
           board_a?: string[] | null
           board_b?: string[] | null
+          board_c?: string[] | null
           created_at?: string
           final_pot: number
           hand_number: number
@@ -159,6 +164,7 @@ export type Database = {
           action_history?: Json | null
           board_a?: string[] | null
           board_b?: string[] | null
+          board_c?: string[] | null
           created_at?: string
           final_pot?: number
           hand_number?: number
@@ -282,6 +288,63 @@ export type Database = {
           },
         ]
       }
+      player_partitions: {
+        Row: {
+          auth_user_id: string | null
+          created_at: string
+          game_state_id: string
+          id: string
+          is_submitted: boolean
+          one_board_card: Json
+          room_id: string
+          seat_number: number
+          submitted_at: string | null
+          three_board_cards: Json
+          two_board_cards: Json
+        }
+        Insert: {
+          auth_user_id?: string | null
+          created_at?: string
+          game_state_id: string
+          id?: string
+          is_submitted?: boolean
+          one_board_card: Json
+          room_id: string
+          seat_number: number
+          submitted_at?: string | null
+          three_board_cards: Json
+          two_board_cards: Json
+        }
+        Update: {
+          auth_user_id?: string | null
+          created_at?: string
+          game_state_id?: string
+          id?: string
+          is_submitted?: boolean
+          one_board_card?: Json
+          room_id?: string
+          seat_number?: number
+          submitted_at?: string | null
+          three_board_cards?: Json
+          two_board_cards?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_partitions_game_state_id_fkey"
+            columns: ["game_state_id"]
+            isOneToOne: false
+            referencedRelation: "game_states"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_partitions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_players: {
         Row: {
           auth_user_id: string | null
@@ -363,6 +426,7 @@ export type Database = {
           pause_after_hand: boolean
           small_blind: number
           updated_at: string
+          uses_two_decks: boolean
         }
         Insert: {
           big_blind: number
@@ -382,6 +446,7 @@ export type Database = {
           pause_after_hand?: boolean
           small_blind: number
           updated_at?: string
+          uses_two_decks?: boolean
         }
         Update: {
           big_blind?: number
@@ -401,6 +466,7 @@ export type Database = {
           pause_after_hand?: boolean
           small_blind?: number
           updated_at?: string
+          uses_two_decks?: boolean
         }
         Relationships: []
       }
@@ -413,7 +479,11 @@ export type Database = {
     }
     Enums: {
       action_type: "fold" | "check" | "call" | "bet" | "raise" | "all_in"
-      game_mode: "double_board_bomb_pot_plo" | "texas_holdem" | "indian_poker"
+      game_mode:
+        | "double_board_bomb_pot_plo"
+        | "texas_holdem"
+        | "indian_poker"
+        | "game_mode_321"
       game_phase:
         | "waiting"
         | "dealing"
@@ -423,6 +493,7 @@ export type Database = {
         | "showdown"
         | "complete"
         | "preflop"
+        | "partition"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -551,7 +622,12 @@ export const Constants = {
   public: {
     Enums: {
       action_type: ["fold", "check", "call", "bet", "raise", "all_in"],
-      game_mode: ["double_board_bomb_pot_plo", "texas_holdem", "indian_poker"],
+      game_mode: [
+        "double_board_bomb_pot_plo",
+        "texas_holdem",
+        "indian_poker",
+        "game_mode_321",
+      ],
       game_phase: [
         "waiting",
         "dealing",
@@ -561,6 +637,7 @@ export const Constants = {
         "showdown",
         "complete",
         "preflop",
+        "partition",
       ],
     },
   },

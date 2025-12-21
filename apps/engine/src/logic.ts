@@ -398,6 +398,12 @@ export interface ActionContext {
   fullBoard2: string[];
   fullBoard3?: string[];  // For 321 mode
   playerHands?: Array<{ seat_number: number; cards: string[] }>; // Optional: only needed for Indian Poker showdown
+  playerPartitions?: Array<{
+    seat_number: number;
+    three_board_cards: unknown;
+    two_board_cards: unknown;
+    one_board_card: unknown;
+  }>; // Optional: only needed for 321 mode showdown
 }
 
 export interface ActionOutcome {
@@ -433,7 +439,7 @@ export function applyAction(
   actionType: ActionType,
   amount?: number,
 ): ActionOutcome {
-  const { gameState, players, room, fullBoard1, fullBoard2, fullBoard3 } = ctx;
+  const { gameState, players, room, fullBoard1, fullBoard2, fullBoard3, playerPartitions } = ctx;
 
   if (
     gameState.current_actor_seat !== seatNumber &&
@@ -849,6 +855,11 @@ export function applyAction(
       fullBoard1?: string[];
       fullBoard2?: string[];
       fullBoard3?: string[];
+      revealed_partitions?: Record<number, {
+        three_board_cards: string[];
+        two_board_cards: string[];
+        one_board_card: string[];
+      }>;
     } = { ...boardState };
 
     const isHoldem = room.game_mode === "texas_holdem";
@@ -919,6 +930,25 @@ export function applyAction(
       updatedBoardState.fullBoard2 = fullBoard2;
       if (is321 && fullBoard3) {
         updatedBoardState.fullBoard3 = fullBoard3;
+      }
+
+      // For 321 mode, reveal all player partitions at showdown
+      if (is321 && playerPartitions) {
+        const revealedPartitions: Record<number, {
+          three_board_cards: string[];
+          two_board_cards: string[];
+          one_board_card: string[];
+        }> = {};
+
+        for (const partition of playerPartitions) {
+          revealedPartitions[partition.seat_number] = {
+            three_board_cards: partition.three_board_cards as unknown as string[],
+            two_board_cards: partition.two_board_cards as unknown as string[],
+            one_board_card: partition.one_board_card as unknown as string[],
+          };
+        }
+
+        updatedBoardState.revealed_partitions = revealedPartitions;
       }
     }
 

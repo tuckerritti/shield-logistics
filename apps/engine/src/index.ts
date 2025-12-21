@@ -549,6 +549,31 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
       }
     }
 
+    // Fetch player partitions for 321 mode showdown reveal
+    let playerPartitions: Array<{
+      seat_number: number;
+      three_board_cards: unknown;
+      two_board_cards: unknown;
+      one_board_card: unknown;
+    }> | undefined;
+    if (room.game_mode === "game_mode_321") {
+      const { data: partitionsData, error: partitionsErr } = await supabase
+        .from("player_partitions")
+        .select("seat_number, three_board_cards, two_board_cards, one_board_card")
+        .eq("game_state_id", gameState.id);
+      if (partitionsErr) {
+        // Don't throw - partitions may not exist yet if still in partition phase
+        console.error("Failed to fetch partitions:", partitionsErr);
+      } else if (partitionsData) {
+        playerPartitions = partitionsData.map((p) => ({
+          seat_number: p.seat_number,
+          three_board_cards: p.three_board_cards,
+          two_board_cards: p.two_board_cards,
+          one_board_card: p.one_board_card,
+        }));
+      }
+    }
+
     const outcome = applyAction(
       {
         room: room as Room,
@@ -558,6 +583,7 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         fullBoard2: secret.full_board2,
         fullBoard3: secret.full_board3 ?? undefined,
         playerHands,
+        playerPartitions,
       },
       payload.seatNumber,
       payload.actionType as ActionType,
@@ -982,6 +1008,26 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
           fullBoard1: board1,
           fullBoard2: board2,
           fullBoard3: board3,
+          player_partitions: Object.fromEntries(
+            partitions.map(p => [
+              p.seatNumber.toString(),
+              {
+                threeBoardCards: p.threeBoardCards,
+                twoBoardCards: p.twoBoardCards,
+                oneBoardCard: p.oneBoardCard,
+              }
+            ])
+          ),
+          revealed_partitions: Object.fromEntries(
+            partitions.map(p => [
+              p.seatNumber,
+              {
+                three_board_cards: p.threeBoardCards,
+                two_board_cards: p.twoBoardCards,
+                one_board_card: p.oneBoardCard,
+              }
+            ])
+          )
         },
         side_pots: sidePots,
       })

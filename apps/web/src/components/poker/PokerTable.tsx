@@ -18,7 +18,13 @@ interface PokerTableProps {
   phase?: string;
   gameMode?: GameMode | "game_mode_321";
   visiblePlayerCards?: Record<string, string[]>;
+  playerPartitions?: Record<string, {
+    threeBoardCards: string[];
+    twoBoardCards: string[];
+    oneBoardCard: string[];
+  }>;
   showdownProgress?: number | null;
+  showdownTransitionMs?: number;
   onSeatClick: (seatNumber: number) => void;
 }
 
@@ -37,8 +43,10 @@ export function PokerTable({
   phase,
   gameMode,
   visiblePlayerCards = {},
+  playerPartitions = {},
   onSeatClick,
   showdownProgress = null,
+  showdownTransitionMs = 0,
 }: PokerTableProps) {
   // Detect mobile viewport without triggering hydration mismatch
   const subscribeToMobile = useCallback((callback: () => void) => {
@@ -65,8 +73,8 @@ export function PokerTable({
   const tableRotation = isMobile ? 0 : 90;
   const tableScale = 1;
   const seatBoxWidth = isMobile
-    ? "clamp(60px, 18vw, 92px)"
-    : "clamp(88px, 12vw, 122px)";
+    ? "clamp(56px, 18vw, 92px)"
+    : "clamp(84px, 12vw, 120px)";
 
   // Hole card count depends on game type (1 for Indian Poker, 2 for Hold'em, 4 for PLO, 6 for 321)
   const isIndianPoker = gameMode === "indian_poker";
@@ -106,6 +114,27 @@ export function PokerTable({
   const myHasFolded = myPlayer?.has_folded ?? false;
   const mySeatNumber = myPlayer?.seat_number;
 
+  // Helper function to group 321 cards by partition
+  const getGroupedCards = (
+    cards: string[],
+    seatNumber: number,
+  ): { group3: string[]; group2: string[]; group1: string[] } => {
+    const partition = playerPartitions[seatNumber.toString()];
+    if (partition) {
+      return {
+        group3: partition.threeBoardCards,
+        group2: partition.twoBoardCards,
+        group1: partition.oneBoardCard,
+      };
+    }
+    // Fallback: split by position if no partition data
+    return {
+      group3: cards.slice(0, 3),
+      group2: cards.slice(3, 5),
+      group1: cards.slice(5, 6),
+    };
+  };
+
   // Handle fold card reveal for Indian Poker
   useEffect(() => {
     if (!isIndianPoker || !myPlayerId) return;
@@ -139,6 +168,7 @@ export function PokerTable({
 
   // Check if current user already has a seat
   const userHasSeat = seatedPlayers.some((p) => p.id === myPlayerId);
+  const shouldHideEmptySeats = userHasSeat && !!phase && phase !== "waiting";
 
   // Determine if we should show side pots separately
   // Only show side pots if there's an all-in situation
@@ -304,6 +334,9 @@ export function PokerTable({
         const isMyPlayer = player?.id === myPlayerId;
         const isCurrentActor = currentActorSeat === seatNumber;
         const isEmpty = !player;
+        const isShowdownPhase = phase === "showdown" || phase === "complete";
+        const visibleCards = visiblePlayerCards?.[seatNumber.toString()];
+        const hasVisibleCards = !!(visibleCards && visibleCards.length > 0);
         const hasButton = buttonSeat === seatNumber;
         const shouldRaiseMyCards =
           !isIndianPoker && isMyPlayer && myHoleCards.length > 0;
@@ -322,14 +355,28 @@ export function PokerTable({
             : isMobile
               ? "-top-12"
               : "-top-20";
-        const holeCardsZClass =
+        const hasFaceUpCards =
+          !isEmpty &&
+          isShowdownPhase &&
+          (hasVisibleCards ||
+            (!isIndianPoker && isMyPlayer && myHoleCards.length > 0));
+        const baseHoleCardsZClass =
           isIndianPoker || !isMyPlayer || myHoleCards.length === 0
             ? "z-0"
             : "z-50";
+        const holeCardsZClass = hasFaceUpCards
+          ? isMyPlayer
+            ? "z-50"
+            : "z-30"
+          : baseHoleCardsZClass;
         const seatZClass =
           !isIndianPoker && isMyPlayer && myHoleCards.length > 0
             ? "z-50"
             : "z-10";
+
+        if (shouldHideEmptySeats && isEmpty) {
+          return null;
+        }
 
         return (
           <button
@@ -338,7 +385,7 @@ export function PokerTable({
             disabled={!isEmpty || userHasSeat}
             className={`absolute -translate-x-1/2 -translate-y-1/2 transition-all ${seatZClass} ${
               isEmpty && !userHasSeat
-                ? "cursor-pointer hover:scale-105"
+                ? "cursor-pointer"
                 : "cursor-default"
             }`}
             style={{
@@ -376,11 +423,11 @@ export function PokerTable({
                 </div>
               ) : (
                 <div className="text-center">
-                  <div className="text-[11px] sm:text-sm font-bold text-cream-parchment truncate">
+                  <div className="text-[10px] sm:text-xs font-bold text-cream-parchment truncate">
                     {player.display_name}
                   </div>
                   <div
-                    className="mt-1 text-base sm:text-lg font-bold text-whiskey-gold"
+                    className="mt-0.5 text-sm sm:text-base font-bold text-whiskey-gold"
                     style={{ fontFamily: "Roboto Mono, monospace" }}
                   >
                     ${player.chip_stack}
@@ -454,47 +501,119 @@ export function PokerTable({
                       ) : null;
                     })()
                   ) : isMyPlayer && myHoleCards.length > 0 ? (
-                    // My cards: spread out horizontally (Hold'em/PLO/321)
-                    <div className="flex gap-0.5 sm:gap-1">
-                      {myHoleCards
-                        .filter((card) => card != null)
-                        .map((card, index) => (
-                          <Card key={index} card={card} size={is321 ? "sm" : "md"} />
-                        ))}
-                    </div>
-                  ) : (
-                    // Other players: fanned out face-down cards (Hold'em/PLO/321)
-                    <div
-                      className="relative flex items-center justify-center"
-                      style={{
-                        width: isMobile
-                          ? "clamp(64px, 24vw, 96px)"
-                          : "clamp(96px, 18vw, 120px)",
-                        height: isMobile ? "52px" : "64px",
-                      }}
-                    >
-                      {Array.from({ length: holeCardCount }, (_, cardIndex) => {
-                        const centerOffset = (holeCardCount - 1) / 2;
-                        const rotation =
-                          (cardIndex - centerOffset) * holeCardRotationStep;
-                        const xOffset =
-                          (cardIndex - centerOffset) * holeCardSpread;
+                    // My cards: grouped for 321 only if partition data exists, otherwise spread
+                    (() => {
+                      const hasPartition = is321 && myHoleCards.length === 6 &&
+                        playerPartitions[player.seat_number.toString()];
 
+                      if (hasPartition) {
+                        const { group3, group2, group1 } = getGroupedCards(
+                          myHoleCards,
+                          player.seat_number,
+                        );
                         return (
-                          <div
-                            key={cardIndex}
-                            className="absolute"
-                            style={{
-                              transform: `translateX(${xOffset}px) rotate(${rotation}deg)`,
-                              zIndex: cardIndex,
-                            }}
-                          >
-                            <Card card="Ah" faceDown={true} size={is321 ? "sm" : "md"} />
+                          <div className="flex gap-2 sm:gap-3">
+                            <div className="flex gap-0.5 sm:gap-1">
+                              {group3.map((card, idx) => (
+                                <Card key={idx} card={card} size="sm" />
+                              ))}
+                            </div>
+                            <div className="flex gap-0.5 sm:gap-1">
+                              {group2.map((card, idx) => (
+                                <Card key={idx} card={card} size="sm" />
+                              ))}
+                            </div>
+                            <div className="flex gap-0.5 sm:gap-1">
+                              {group1.map((card, idx) => (
+                                <Card key={idx} card={card} size="sm" />
+                              ))}
+                            </div>
                           </div>
                         );
-                      })}
-                    </div>
-                  )}
+                      }
+
+                      // Default: all cards together
+                      return (
+                        <div className="flex gap-0.5 sm:gap-1">
+                          {myHoleCards
+                            .filter((card) => card != null)
+                            .map((card, index) => (
+                              <div
+                                key={index}
+                                className="transition-opacity hover:opacity-60"
+                              >
+                                <Card card={card} size={is321 ? "sm" : "md"} />
+                              </div>
+                            ))}
+                        </div>
+                      );
+                    })()
+                  ) : (() => {
+                    // Other players: check for visible cards at showdown
+                    const visibleCards = visiblePlayerCards?.[player.seat_number.toString()];
+                    const isShowdown = phase === "showdown" || phase === "complete";
+
+                    // 321 mode at showdown: show grouped cards
+                    if (is321 && isShowdown && visibleCards && visibleCards.length === 6) {
+                      const { group3, group2, group1 } = getGroupedCards(
+                        visibleCards,
+                        player.seat_number,
+                      );
+                      return (
+                        <div className="flex gap-2 sm:gap-3">
+                          <div className="flex gap-0.5 sm:gap-1">
+                            {group3.map((card, idx) => (
+                              <Card key={idx} card={card} size="sm" />
+                            ))}
+                          </div>
+                          <div className="flex gap-0.5 sm:gap-1">
+                            {group2.map((card, idx) => (
+                              <Card key={idx} card={card} size="sm" />
+                            ))}
+                          </div>
+                          <div className="flex gap-0.5 sm:gap-1">
+                            {group1.map((card, idx) => (
+                              <Card key={idx} card={card} size="sm" />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Default: fanned out face-down cards
+                    return (
+                      <div
+                        className="relative flex items-center justify-center"
+                        style={{
+                          width: isMobile
+                            ? "clamp(64px, 24vw, 96px)"
+                            : "clamp(96px, 18vw, 120px)",
+                          height: isMobile ? "52px" : "64px",
+                        }}
+                      >
+                        {Array.from({ length: holeCardCount }, (_, cardIndex) => {
+                          const centerOffset = (holeCardCount - 1) / 2;
+                          const rotation =
+                            (cardIndex - centerOffset) * holeCardRotationStep;
+                          const xOffset =
+                            (cardIndex - centerOffset) * holeCardSpread;
+
+                          return (
+                            <div
+                              key={cardIndex}
+                              className="absolute"
+                              style={{
+                                transform: `translateX(${xOffset}px) rotate(${rotation}deg)`,
+                                zIndex: cardIndex,
+                              }}
+                            >
+                              <Card card="Ah" faceDown={true} size={is321 ? "sm" : "md"} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -578,7 +697,10 @@ export function PokerTable({
                     className="h-3 bg-whiskey-gold shadow-[0_0_14px_rgba(255,196,90,0.65)]"
                     style={{
                       width: `${Math.max(0, Math.min(1, showdownProgress)) * 100}%`,
-                      transition: "width 80ms linear",
+                      transition:
+                        showdownTransitionMs > 0
+                          ? `width ${showdownTransitionMs}ms linear`
+                          : "none",
                     }}
                   />
                 </div>

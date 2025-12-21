@@ -64,6 +64,11 @@ export interface GameStateRow {
     board1?: string[];
     board2?: string[];
     board3?: string[]; // 3rd board for 321 mode
+    revealed_partitions?: Record<number, {
+      three_board_cards: string[];
+      two_board_cards: string[];
+      one_board_card: string[];
+    }>; // Revealed at showdown in 321 mode
   } | null;
   side_pots: SidePot[] | null;
   action_history: unknown;
