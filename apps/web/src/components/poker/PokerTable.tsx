@@ -12,6 +12,7 @@ interface PokerTableProps {
   buttonSeat?: number | null;
   boardA?: string[];
   boardB?: string[];
+  boardC?: string[];
   potSize?: number;
   sidePots?: Array<{ amount: number; eligibleSeats: number[] }>;
   phase?: string;
@@ -30,6 +31,7 @@ export function PokerTable({
   buttonSeat,
   boardA = [],
   boardB = [],
+  boardC = [],
   potSize = 0,
   sidePots = [],
   phase,
@@ -66,15 +68,18 @@ export function PokerTable({
     ? "clamp(68px, 21vw, 104px)"
     : "clamp(96px, 14vw, 136px)";
 
-  // Hole card count depends on game type (1 for Indian Poker, 2 for Hold'em, 4 for PLO variants)
+  // Hole card count depends on game type (1 for Indian Poker, 2 for Hold'em, 4 for PLO, 6 for 321)
   const isIndianPoker = gameMode === "indian_poker";
+  const is321 = gameMode === "game_mode_321";
   const holeCardCount = isIndianPoker
     ? 1
     : gameMode === "texas_holdem"
       ? 2
-      : 4;
+      : is321
+        ? 6
+        : 4;
   const holeCardRotationStep =
-    holeCardCount === 2 ? 6 : holeCardCount === 1 ? 0 : 8;
+    holeCardCount === 2 ? 6 : holeCardCount === 1 ? 0 : holeCardCount === 6 ? 6 : 8;
   const holeCardSpread =
     holeCardCount === 2
       ? isMobile
@@ -82,9 +87,13 @@ export function PokerTable({
         : 18
       : holeCardCount === 1
         ? 0
-        : isMobile
-          ? 12
-          : 16;
+        : holeCardCount === 6
+          ? isMobile
+            ? 10
+            : 14
+          : isMobile
+            ? 12
+            : 16;
 
   // State for fold card reveal (Indian Poker)
   const [revealedFoldedCard, setRevealedFoldedCard] = useState<{
@@ -298,8 +307,15 @@ export function PokerTable({
         const hasButton = buttonSeat === seatNumber;
         const shouldRaiseMyCards =
           !isIndianPoker && isMyPlayer && myHoleCards.length > 0;
-        const holeCardsOffsetClass =
-          shouldRaiseMyCards
+        const holeCardsOffsetClass = is321
+          ? shouldRaiseMyCards
+            ? isMobile
+              ? "-top-10"
+              : "-top-16"
+            : isMobile
+              ? "-top-8"
+              : "-top-12"
+          : shouldRaiseMyCards
             ? isMobile
               ? "-top-16"
               : "-top-28"
@@ -309,6 +325,10 @@ export function PokerTable({
         const holeCardsZClass =
           isIndianPoker || !isMyPlayer || myHoleCards.length === 0
             ? "z-0"
+            : "z-50";
+        const seatZClass =
+          !isIndianPoker && isMyPlayer && myHoleCards.length > 0
+            ? "z-50"
             : "z-10";
 
         return (
@@ -316,7 +336,7 @@ export function PokerTable({
             key={seatNumber}
             onClick={() => isEmpty && !userHasSeat && onSeatClick(seatNumber)}
             disabled={!isEmpty || userHasSeat}
-            className={`absolute -translate-x-1/2 -translate-y-1/2 transition-all z-10 ${
+            className={`absolute -translate-x-1/2 -translate-y-1/2 transition-all ${seatZClass} ${
               isEmpty && !userHasSeat
                 ? "cursor-pointer hover:scale-105"
                 : "cursor-default"
@@ -434,16 +454,16 @@ export function PokerTable({
                       ) : null;
                     })()
                   ) : isMyPlayer && myHoleCards.length > 0 ? (
-                    // My cards: spread out horizontally (Hold'em/PLO)
+                    // My cards: spread out horizontally (Hold'em/PLO/321)
                     <div className="flex gap-0.5 sm:gap-1">
                       {myHoleCards
                         .filter((card) => card != null)
                         .map((card, index) => (
-                          <Card key={index} card={card} size="md" />
+                          <Card key={index} card={card} size={is321 ? "sm" : "md"} />
                         ))}
                     </div>
                   ) : (
-                    // Other players: fanned out face-down cards (Hold'em/PLO)
+                    // Other players: fanned out face-down cards (Hold'em/PLO/321)
                     <div
                       className="relative flex items-center justify-center"
                       style={{
@@ -469,7 +489,7 @@ export function PokerTable({
                               zIndex: cardIndex,
                             }}
                           >
-                            <Card card="Ah" faceDown={true} size="md" />
+                            <Card card="Ah" faceDown={true} size={is321 ? "sm" : "md"} />
                           </div>
                         );
                       })}
@@ -546,8 +566,10 @@ export function PokerTable({
             <CommunityCards
               boardA={boardA}
               boardB={boardB}
+              boardC={boardC}
               phase={phase}
               myHoleCards={myHoleCards}
+              gameMode={gameMode}
             />
             {showdownProgress !== null && (
               <div className="w-full flex justify-center">

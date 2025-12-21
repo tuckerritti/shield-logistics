@@ -482,17 +482,21 @@ export default function RoomPage({
   // Get community cards and visible player cards from board_state JSONB
   let boardA: string[] = [];
   let boardB: string[] = [];
+  let boardC: string[] = [];
   let visiblePlayerCards: Record<string, string[]> = {};
   if (gameState?.board_state) {
     const boardState = gameState.board_state as unknown as BoardState;
     boardA = boardState.board1 || [];
     boardB = boardState.board2 || [];
+    boardC = boardState.board3 || [];
     visiblePlayerCards = boardState.visible_player_cards || {};
     console.log("Board state received:", {
       boardA,
       boardB,
+      boardC,
       boardALength: boardA.length,
       boardBLength: boardB.length,
+      boardCLength: boardC.length,
       visiblePlayerCards,
     });
   }
@@ -658,6 +662,7 @@ export default function RoomPage({
             buttonSeat={gameState?.button_seat ?? null}
             boardA={boardA}
             boardB={boardB}
+            boardC={boardC}
             potSize={gameState?.pot_size ?? 0}
             sidePots={sidePots}
             phase={gameState?.phase}

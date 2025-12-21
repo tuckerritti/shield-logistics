@@ -733,16 +733,38 @@ export function applyAction(
     // fast-forward to showdown/complete and reveal all community cards.
     if (nonAllInCount <= 1) {
       const isHoldem = room.game_mode === "texas_holdem";
+      const is321 = room.game_mode === "game_mode_321";
       const updatedBoardState = {
         board1: fullBoard1.slice(0, 5),
         board2: isHoldem ? [] : fullBoard2.slice(0, 5),
+        board3: is321 && fullBoard3 ? fullBoard3.slice(0, 5) : undefined,
         fullBoard1: fullBoard1,
         fullBoard2: isHoldem ? [] : fullBoard2,
+        fullBoard3: is321 && fullBoard3 ? fullBoard3 : undefined,
       };
 
       const calculatedSidePotsFinal = calculateSidePots(
         activeNonFoldedPlayers as RoomPlayer[],
       );
+
+      // In 321 mode we must still collect partitions before showdown.
+      if (is321) {
+        return {
+          updatedGameState: {
+            phase: "partition",
+            current_actor_seat: null,
+            seats_to_act: [],
+            seats_acted: activeSeats,
+            action_history: [...actionHistory],
+            current_bet: currentBet,
+            pot_size: pot,
+            board_state: updatedBoardState,
+            side_pots: calculatedSidePotsFinal,
+          },
+          updatedPlayers,
+          handCompleted: false,
+        };
+      }
 
       return {
         updatedGameState: {
@@ -1188,11 +1210,15 @@ function evaluate3BoardHand(
   if (holeCards.length !== 3) return { strength: 0, hand: [] };
   if (board.length !== 5) return { strength: 0, hand: [] };
 
-  // Combine all 8 cards and find best 5-card hand
-  const allCards = [...holeCards, ...board];
-
   try {
-    const result = evaluate(allCards as unknown as Parameters<typeof evaluate>[0]);
+    const result = evaluate({
+      holeCards: [...holeCards, ...board] as unknown as Parameters<
+        typeof evaluate
+      >[0]["holeCards"],
+      communityCards: [],
+      minimumHoleCards: 0,
+      maximumHoleCards: 5,
+    });
     return {
       strength: result.strength,
       hand: result.hand as unknown as string[],
@@ -1213,26 +1239,22 @@ function evaluate1BoardHand(
   if (holeCards.length !== 1) return { strength: 0, hand: [] };
   if (board.length !== 5) return { strength: 0, hand: [] };
 
-  let bestStrength = 0;
-  let bestHand: string[] = [];
-
-  // Try all C(5,4) = 5 combinations of 4 board cards
-  for (let i = 0; i < 5; i++) {
-    const fourBoardCards = board.filter((_, idx) => idx !== i);
-    const hand = [holeCards[0], ...fourBoardCards];
-
-    try {
-      const result = evaluate(hand as unknown as Parameters<typeof evaluate>[0]);
-      if (result.strength > bestStrength) {
-        bestStrength = result.strength;
-        bestHand = result.hand as unknown as string[];
-      }
-    } catch {
-      // Skip invalid combinations
-    }
+  try {
+    const result = evaluate({
+      holeCards: [holeCards[0], ...board] as unknown as Parameters<
+        typeof evaluate
+      >[0]["holeCards"],
+      communityCards: [],
+      minimumHoleCards: 0,
+      maximumHoleCards: 5,
+    });
+    return {
+      strength: result.strength,
+      hand: result.hand as unknown as string[],
+    };
+  } catch {
+    return { strength: 0, hand: [] };
   }
-
-  return { strength: bestStrength, hand: bestHand };
 }
 
 /**

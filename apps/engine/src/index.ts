@@ -11,9 +11,17 @@ import {
   determineDoubleBoardWinners,
   determineSingleBoardWinners,
   determineIndianPokerWinners,
+  determine321Winners,
   calculateSidePots,
+  endOfHandPayout321,
 } from "./logic.js";
-import type { GameStateRow, Room, RoomPlayer, SidePot } from "./types.js";
+import type {
+  GameStateRow,
+  Room,
+  RoomPlayer,
+  SidePot,
+  PlayerPartitionRow,
+} from "./types.js";
 import { ActionType } from "@poker/shared";
 import { fetchGameStateSecret } from "./secrets.js";
 import { handCompletionCleanup } from "./cleanup.js";
@@ -115,6 +123,13 @@ const actionSchema = z.object({
   actionType: z.enum(ACTIONS),
   amount: z.number().int().positive().optional(),
   idempotencyKey: z.string().optional(),
+});
+
+const partitionSchema = z.object({
+  seatNumber: z.number().int(),
+  threeBoardCards: z.array(z.string()).length(3),
+  twoBoardCards: z.array(z.string()).length(2),
+  oneBoardCard: z.array(z.string()).length(1),
 });
 
 app.get("/health", (_req: Request, res: Response) => {
@@ -727,6 +742,7 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         final_pot: outcome.potAwarded ?? gameState.pot_size ?? 0,
         board_a: boardState?.board1 ?? null,
         board_b: boardState?.board2 ?? null,
+        board_c: (boardState as any)?.board3 ?? null,
         winners: allWinners,
         action_history:
           outcome.updatedGameState.action_history ?? gameState.action_history,
@@ -771,6 +787,271 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     logger.error({ err }, "failed to process action");
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * Partition submission for 321 mode.
+ * Each active player must submit exactly 6 cards split as 3/2/1 before showdown.
+ */
+app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
+  const roomId = req.params.roomId;
+  const parseResult = partitionSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res.status(400).json({ error: parseResult.error.message });
+  }
+  const payload = parseResult.data;
+
+  try {
+    const userId = await requireUser(req, res);
+    if (!userId) return;
+
+    const room = await fetchRoom(roomId);
+    if (!room) return res.status(404).json({ error: "Room not found" });
+    if (room.game_mode !== "game_mode_321") {
+      return res.status(400).json({ error: "Partitioning is only for 321 mode" });
+    }
+
+    const gameState = await fetchLatestGameState(roomId);
+    if (!gameState) return res.status(400).json({ error: "No active hand" });
+    if (gameState.phase !== "partition") {
+      return res.status(400).json({ error: `Cannot submit partition in phase ${gameState.phase}` });
+    }
+    if (gameState.hand_completed_at) {
+      return res.status(409).json({ error: "Hand already completed" });
+    }
+
+    const secret = await fetchGameStateSecret(gameState.id);
+    if (!secret) return res.status(500).json({ error: "Missing game secrets" });
+
+    const players = await fetchPlayers(roomId);
+    const actingPlayer = players.find((p) => p.seat_number === payload.seatNumber);
+    if (!actingPlayer) return res.status(404).json({ error: "Seat not found" });
+
+    if (actingPlayer.has_folded || actingPlayer.is_sitting_out || actingPlayer.is_spectating) {
+      return res.status(400).json({ error: "Player is not active in this hand" });
+    }
+
+    if (actingPlayer.auth_user_id && actingPlayer.auth_user_id !== userId) {
+      return res.status(403).json({ error: "You are not authorized for this seat" });
+    }
+    if (!actingPlayer.auth_user_id) {
+      await supabase
+        .from("room_players")
+        .update({ auth_user_id: userId })
+        .eq("id", actingPlayer.id);
+      actingPlayer.auth_user_id = userId;
+    }
+
+    // Fetch player's hole cards for this hand
+    const { data: handRow, error: handErr } = await supabase
+      .from("player_hands")
+      .select("cards")
+      .eq("game_state_id", gameState.id)
+      .eq("seat_number", payload.seatNumber)
+      .single();
+    if (handErr || !handRow) throw handErr ?? new Error("Player hand not found");
+    const playerCards = (handRow.cards as unknown as string[]) ?? [];
+
+    const submittedCards = [
+      ...payload.threeBoardCards,
+      ...payload.twoBoardCards,
+      ...payload.oneBoardCard,
+    ];
+
+    const allUnique = new Set(submittedCards);
+    if (submittedCards.length !== 6 || allUnique.size !== 6) {
+      return res.status(400).json({ error: "Partitions must contain 6 unique cards" });
+    }
+
+    const handSet = new Set(playerCards);
+    const missing = submittedCards.filter((c) => !handSet.has(c));
+    if (missing.length > 0 || handSet.size !== 6) {
+      return res
+        .status(400)
+        .json({ error: "Partition must use exactly the player's 6 hole cards" });
+    }
+
+    const now = new Date().toISOString();
+    const { error: upsertErr } = await supabase.from("player_partitions").upsert(
+      {
+        room_id: roomId,
+        game_state_id: gameState.id,
+        seat_number: payload.seatNumber,
+        auth_user_id: actingPlayer.auth_user_id ?? userId,
+        three_board_cards: payload.threeBoardCards,
+        two_board_cards: payload.twoBoardCards,
+        one_board_card: payload.oneBoardCard,
+        is_submitted: true,
+        submitted_at: now,
+      },
+      { onConflict: "game_state_id,seat_number" },
+    );
+    if (upsertErr) throw upsertErr;
+
+    // Check submission progress
+    const requiredSeats = players
+      .filter((p) => !p.has_folded && !p.is_spectating && !p.is_sitting_out)
+      .map((p) => p.seat_number);
+
+    const { data: submittedRows, error: submittedErr } = await supabase
+      .from("player_partitions")
+      .select("seat_number, three_board_cards, two_board_cards, one_board_card")
+      .eq("game_state_id", gameState.id)
+      .eq("is_submitted", true);
+    if (submittedErr) throw submittedErr;
+
+    const submittedSeats = new Set((submittedRows ?? []).map((r) => r.seat_number));
+    const pendingSeats = requiredSeats.filter((s) => !submittedSeats.has(s));
+
+    if (pendingSeats.length > 0) {
+      return res.json({
+        ok: true,
+        pendingSeats,
+        submittedCount: submittedSeats.size,
+        requiredCount: requiredSeats.length,
+      });
+    }
+
+    // All partitions are in: determine winners and pay out
+    const sidePots =
+      (gameState.side_pots as SidePot[] | null) ?? calculateSidePots(players);
+
+    const board1 = secret.full_board1 || [];
+    const board2 = secret.full_board2 || [];
+    const board3 = secret.full_board3 || [];
+
+    const partitions = (submittedRows ?? []).map((r) => ({
+      seatNumber: r.seat_number,
+      threeBoardCards: r.three_board_cards as string[],
+      twoBoardCards: r.two_board_cards as string[],
+      oneBoardCard: r.one_board_card as string[],
+    }));
+
+    const { board1Winners, board2Winners, board3Winners } = determine321Winners(
+      partitions,
+      board1,
+      board2,
+      board3,
+    );
+
+    const payouts = endOfHandPayout321(
+      sidePots,
+      board1Winners,
+      board2Winners,
+      board3Winners,
+    );
+
+    // Credit winners
+    if (payouts.length) {
+      const creditUpdates = payouts
+        .map((p) => {
+          const player = players.find((pl) => pl.seat_number === p.seat);
+          return player
+            ? {
+                id: player.id,
+                room_id: player.room_id,
+                seat_number: player.seat_number,
+                auth_user_id: player.auth_user_id,
+                display_name: player.display_name,
+                total_buy_in: player.total_buy_in,
+                chip_stack: (player.chip_stack ?? 0) + p.amount,
+              }
+            : null;
+        })
+        .filter(Boolean) as Partial<RoomPlayer>[];
+
+      if (creditUpdates.length) {
+        const { error: creditErr } = await supabase
+          .from("room_players")
+          .upsert(creditUpdates);
+        if (creditErr) throw creditErr;
+      }
+    }
+
+    // Mark hand complete (guard against double-finalization)
+    const completionTime = new Date().toISOString();
+    const { error: gsUpdateErr } = await supabase
+      .from("game_states")
+      .update({
+        phase: "complete",
+        current_actor_seat: null,
+        seats_to_act: [],
+        seats_acted: requiredSeats,
+        hand_completed_at: completionTime,
+        board_state: {
+          board1,
+          board2,
+          board3,
+          fullBoard1: board1,
+          fullBoard2: board2,
+          fullBoard3: board3,
+        },
+        side_pots: sidePots,
+      })
+      .eq("id", gameState.id)
+      .is("hand_completed_at", null);
+
+    // If another request already finalized, avoid duplicating results
+    const alreadyCompleted = gsUpdateErr?.code === "PGRST116";
+    if (gsUpdateErr && !alreadyCompleted) {
+      throw gsUpdateErr;
+    }
+
+    // Record hand result only if we just marked completion
+    if (!alreadyCompleted) {
+      const { error: resultsErr } = await supabase.from("hand_results").insert({
+        room_id: roomId,
+        hand_number: gameState.hand_number,
+        final_pot: gameState.pot_size ?? 0,
+        board_a: board1 ?? null,
+        board_b: board2 ?? null,
+        board_c: board3 ?? null,
+        winners: payouts.map((p) => p.seat),
+        action_history: gameState.action_history,
+        shown_hands: null,
+      });
+      if (resultsErr) throw resultsErr;
+
+      // Auto-pause heads-up bust / pause-after-hand logic (reuse applyAction rules)
+      const finalPlayers = players.map((p) => {
+        const credit = payouts.find((c) => c.seat === p.seat_number);
+        return credit ? { ...p, chip_stack: (p.chip_stack ?? 0) + credit.amount } : p;
+      });
+      const activeSeated = finalPlayers.filter(
+        (p) => !p.is_spectating && !p.is_sitting_out,
+      );
+      const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
+      const shouldAutoPause =
+        activeSeated.length === 2 && withChips.length === 1;
+
+      if (shouldAutoPause || room.pause_after_hand) {
+        const { error: pauseErr } = await supabase
+          .from("rooms")
+          .update({
+            is_paused: true,
+            pause_after_hand: false,
+            last_activity_at: new Date().toISOString(),
+          })
+          .eq("id", roomId);
+        if (pauseErr) throw pauseErr;
+      }
+    }
+
+    res.json({
+      ok: true,
+      completed: true,
+      winners: {
+        board1: board1Winners,
+        board2: board2Winners,
+        board3: board3Winners,
+      },
+      payouts,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ err }, "failed to submit partition");
     res.status(500).json({ error: message });
   }
 });
