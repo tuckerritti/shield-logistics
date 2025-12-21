@@ -65,8 +65,8 @@ export function PokerTable({
   const tableRotation = isMobile ? 0 : 90;
   const tableScale = 1;
   const seatBoxWidth = isMobile
-    ? "clamp(68px, 21vw, 104px)"
-    : "clamp(96px, 14vw, 136px)";
+    ? "clamp(60px, 18vw, 92px)"
+    : "clamp(88px, 12vw, 122px)";
 
   // Hole card count depends on game type (1 for Indian Poker, 2 for Hold'em, 4 for PLO, 6 for 321)
   const isIndianPoker = gameMode === "indian_poker";
@@ -348,7 +348,7 @@ export function PokerTable({
           >
             {/* Seat container */}
             <div
-              className={`relative z-10 rounded-lg border-2 px-2 py-2 sm:px-4 sm:py-3 shadow-lg backdrop-blur-md ${
+              className={`relative z-10 rounded-lg border-2 px-1.5 py-1.5 sm:px-3 sm:py-2 shadow-lg backdrop-blur-md ${
                 isEmpty && !userHasSeat
                   ? "border-white/20 bg-black/40 hover:border-whiskey-gold/50 hover:bg-black/50"
                   : isEmpty && userHasSeat
