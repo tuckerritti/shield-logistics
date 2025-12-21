@@ -218,7 +218,9 @@ export default function RoomPage({
       seatedPlayerCount >= 2 &&
       isOwner
     ) {
-      const delayMs = room.inter_hand_delay || 3000;
+      // Note: Changed from || to ?? to respect explicit 0 value (no delay)
+      // Previously 0 would fallback to 3000ms default
+      const delayMs = room.inter_hand_delay ?? 0;
 
       // Show countdown
       let elapsed = 0;
