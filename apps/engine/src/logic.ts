@@ -192,6 +192,28 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   const deckSeed = randomBytes(32).toString("hex");
   const deck = shuffleDeck(deckSeed);
 
+  // Activate players who were waiting for next hand
+  const waitingPlayers = players.filter((p) => p.waiting_for_next_hand);
+  const activatedPlayers: Partial<RoomPlayer>[] = waitingPlayers.map((p) => ({
+    id: p.id,
+    room_id: p.room_id,
+    seat_number: p.seat_number,
+    auth_user_id: p.auth_user_id,
+    display_name: p.display_name,
+    total_buy_in: p.total_buy_in,
+    chip_stack: p.chip_stack,
+    waiting_for_next_hand: false,
+    total_invested_this_hand: 0,
+    current_bet: 0,
+    has_folded: false,
+    is_all_in: false,
+  }));
+
+  // Update local player state for subsequent logic
+  waitingPlayers.forEach((p) => {
+    p.waiting_for_next_hand = false;
+  });
+
   const activePlayers = players.filter(
     (p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0,
   );
@@ -317,7 +339,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   return {
     gameState,
     playerHands,
-    updatedPlayers,
+    updatedPlayers: [...activatedPlayers, ...updatedPlayers],
     deckSeed,
     fullBoard1: board1,
     fullBoard2: board2,

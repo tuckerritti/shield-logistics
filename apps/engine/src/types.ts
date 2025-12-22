@@ -32,6 +32,7 @@ export interface RoomPlayer {
   is_all_in: boolean;
   is_sitting_out: boolean;
   is_spectating: boolean;
+  waiting_for_next_hand: boolean;
   connected_at: string | null;
   last_action_at: string | null;
 }

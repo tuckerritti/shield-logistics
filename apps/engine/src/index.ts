@@ -240,6 +240,10 @@ app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Seat already taken" });
     }
 
+    // Check if a hand is currently in progress
+    const activeGame = await fetchLatestGameState(roomId);
+    const isHandInProgress = activeGame !== null;
+
     const { data, error } = await supabase
       .from("room_players")
       .insert({
@@ -250,6 +254,7 @@ app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
         total_buy_in: payload.buyIn,
         auth_user_id: userId,
         connected_at: new Date().toISOString(),
+        waiting_for_next_hand: isHandInProgress,
       })
       .select()
       .single();
@@ -508,7 +513,9 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
     }
 
     // Fetch player hands for Indian Poker showdown reveal
-    let playerHands: Array<{ seat_number: number; cards: string[] }> | undefined;
+    let playerHands:
+      | Array<{ seat_number: number; cards: string[] }>
+      | undefined;
     if (room.game_mode === "indian_poker") {
       const { data: handsData, error: handsErr } = await supabase
         .from("player_hands")

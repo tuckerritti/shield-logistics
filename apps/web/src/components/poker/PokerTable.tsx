@@ -68,11 +68,7 @@ export function PokerTable({
 
   // Hole card count depends on game type (1 for Indian Poker, 2 for Hold'em, 4 for PLO variants)
   const isIndianPoker = gameMode === "indian_poker";
-  const holeCardCount = isIndianPoker
-    ? 1
-    : gameMode === "texas_holdem"
-      ? 2
-      : 4;
+  const holeCardCount = isIndianPoker ? 1 : gameMode === "texas_holdem" ? 2 : 4;
   const holeCardRotationStep =
     holeCardCount === 2 ? 6 : holeCardCount === 1 ? 0 : 8;
   const holeCardSpread =
@@ -102,7 +98,12 @@ export function PokerTable({
     if (!isIndianPoker || !myPlayerId) return;
 
     // Exit early if player hasn't folded or has no cards
-    if (!myHasFolded || !myHoleCards || myHoleCards.length === 0 || !mySeatNumber) {
+    if (
+      !myHasFolded ||
+      !myHoleCards ||
+      myHoleCards.length === 0 ||
+      !mySeatNumber
+    ) {
       return;
     }
 
@@ -298,14 +299,13 @@ export function PokerTable({
         const hasButton = buttonSeat === seatNumber;
         const shouldRaiseMyCards =
           !isIndianPoker && isMyPlayer && myHoleCards.length > 0;
-        const holeCardsOffsetClass =
-          shouldRaiseMyCards
-            ? isMobile
-              ? "-top-16"
-              : "-top-28"
-            : isMobile
-              ? "-top-12"
-              : "-top-20";
+        const holeCardsOffsetClass = shouldRaiseMyCards
+          ? isMobile
+            ? "-top-16"
+            : "-top-28"
+          : isMobile
+            ? "-top-12"
+            : "-top-20";
         const holeCardsZClass =
           isIndianPoker || !isMyPlayer || myHoleCards.length === 0
             ? "z-0"
@@ -375,6 +375,11 @@ export function PokerTable({
                       All-In
                     </div>
                   )}
+                  {player.waiting_for_next_hand && (
+                    <div className="text-xs font-semibold text-cigar-ash">
+                      Joining Next Hand
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -430,7 +435,11 @@ export function PokerTable({
                       // Always show a card (face-down during play, face-up at showdown for own card)
                       // Other players' cards always face-up
                       return displayCard ? (
-                        <Card card={displayCard} faceDown={showFaceDown} size="md" />
+                        <Card
+                          card={displayCard}
+                          faceDown={showFaceDown}
+                          size="md"
+                        />
                       ) : null;
                     })()
                   ) : isMyPlayer && myHoleCards.length > 0 ? (
