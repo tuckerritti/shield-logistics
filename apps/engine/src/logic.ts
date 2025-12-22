@@ -889,6 +889,7 @@ export function applyAction(
           chip_stack: p.chip_stack,
           current_bet: 0,
           total_invested_this_hand: p.total_invested_this_hand,
+          waiting_for_next_hand: p.waiting_for_next_hand,
         });
         p.current_bet = 0;
       });

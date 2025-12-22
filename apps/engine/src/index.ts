@@ -256,7 +256,8 @@ app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
 
     // Check if a hand is currently in progress
     const activeGame = await fetchLatestGameState(roomId);
-    const isHandInProgress = activeGame !== null;
+    const isHandInProgress =
+      activeGame !== null && !activeGame.hand_completed_at;
 
     const { data, error } = await supabase
       .from("room_players")
@@ -739,6 +740,7 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
                   display_name: player.display_name,
                   total_buy_in: player.total_buy_in,
                   chip_stack: (player.chip_stack ?? 0) + p.amount,
+                  waiting_for_next_hand: player.waiting_for_next_hand,
                 }
               : null;
           })
@@ -1130,6 +1132,7 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
                 display_name: player.display_name,
                 total_buy_in: player.total_buy_in,
                 chip_stack: (player.chip_stack ?? 0) + p.amount,
+                waiting_for_next_hand: player.waiting_for_next_hand,
               }
             : null;
         })

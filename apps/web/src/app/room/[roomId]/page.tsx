@@ -812,7 +812,7 @@ export default function RoomPage({
       />
 
       {/* Header */}
-      <div className="relative flex-shrink-0 p-2 sm:p-3 z-10 bg-royal-blue/85 backdrop-blur-xl border-b border-white/5">
+      <div className="relative flex-shrink-0 p-2 sm:p-3 z-50 bg-royal-blue/85 backdrop-blur-xl border-b border-white/5">
         <div className="glass rounded-lg p-2 sm:p-3 shadow-lg max-w-6xl mx-auto">
           <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex-1 min-w-0 space-y-0.5">
