@@ -383,9 +383,13 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
     }
 
     if (updatedPlayers.length) {
+      const normalizedPlayers = updatedPlayers.map((player) => ({
+        ...player,
+        waiting_for_next_hand: player.waiting_for_next_hand ?? false,
+      }));
       const { error: upErr } = await supabase
         .from("room_players")
-        .upsert(updatedPlayers);
+        .upsert(normalizedPlayers);
       if (upErr) throw upErr;
     }
 
@@ -628,7 +632,12 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
           playerMap.set(player.id, player);
         }
       });
-      const deduplicatedPlayers = Array.from(playerMap.values());
+      const deduplicatedPlayers = Array.from(playerMap.values()).map(
+        (player) => ({
+          ...player,
+          waiting_for_next_hand: player.waiting_for_next_hand ?? false,
+        }),
+      );
 
       const { error: upErr } = await supabase
         .from("room_players")
