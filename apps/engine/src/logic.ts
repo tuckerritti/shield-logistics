@@ -15,8 +15,8 @@ export interface DealResult {
   deckSeed: string;
   fullBoard1: string[];
   fullBoard2: string[];
-  fullBoard3?: string[];  // For 321 mode
-  usesTwoDecks: boolean;  // Indicates if two decks were used
+  fullBoard3?: string[]; // For 321 mode
+  usesTwoDecks: boolean; // Indicates if two decks were used
 }
 
 export function nextButtonSeat(
@@ -244,7 +244,9 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     cardsPerPlayer,
     totalBoardCards,
   );
-  const deck = usesTwoDecks ? shuffleDoubleDeck(deckSeed) : shuffleDeck(deckSeed);
+  const deck = usesTwoDecks
+    ? shuffleDoubleDeck(deckSeed)
+    : shuffleDeck(deckSeed);
 
   // Deal hole cards
   let cursor = 0;
@@ -413,7 +415,7 @@ export interface ActionContext {
   gameState: GameStateRow;
   fullBoard1: string[];
   fullBoard2: string[];
-  fullBoard3?: string[];  // For 321 mode
+  fullBoard3?: string[]; // For 321 mode
   playerHands?: Array<{ seat_number: number; cards: string[] }>; // Optional: only needed for Indian Poker showdown
   playerPartitions?: Array<{
     seat_number: number;
@@ -456,7 +458,15 @@ export function applyAction(
   actionType: ActionType,
   amount?: number,
 ): ActionOutcome {
-  const { gameState, players, room, fullBoard1, fullBoard2, fullBoard3, playerPartitions } = ctx;
+  const {
+    gameState,
+    players,
+    room,
+    fullBoard1,
+    fullBoard2,
+    fullBoard3,
+    playerPartitions,
+  } = ctx;
 
   if (
     gameState.current_actor_seat !== seatNumber &&
@@ -826,7 +836,11 @@ export function applyAction(
     seatsToAct = [];
     currentActor = null;
 
-    if (nextPhase !== "complete" && nextPhase !== "showdown" && nextPhase !== "partition") {
+    if (
+      nextPhase !== "complete" &&
+      nextPhase !== "showdown" &&
+      nextPhase !== "partition"
+    ) {
       // reset bets for the new street
       players.forEach((p) => {
         updatedPlayers.push({
@@ -872,11 +886,14 @@ export function applyAction(
       fullBoard1?: string[];
       fullBoard2?: string[];
       fullBoard3?: string[];
-      revealed_partitions?: Record<number, {
-        three_board_cards: string[];
-        two_board_cards: string[];
-        one_board_card: string[];
-      }>;
+      revealed_partitions?: Record<
+        number,
+        {
+          three_board_cards: string[];
+          two_board_cards: string[];
+          one_board_card: string[];
+        }
+      >;
     } = { ...boardState };
 
     const isHoldem = room.game_mode === "texas_holdem";
@@ -951,15 +968,19 @@ export function applyAction(
 
       // For 321 mode, reveal all player partitions at showdown
       if (is321 && playerPartitions) {
-        const revealedPartitions: Record<number, {
-          three_board_cards: string[];
-          two_board_cards: string[];
-          one_board_card: string[];
-        }> = {};
+        const revealedPartitions: Record<
+          number,
+          {
+            three_board_cards: string[];
+            two_board_cards: string[];
+            one_board_card: string[];
+          }
+        > = {};
 
         for (const partition of playerPartitions) {
           revealedPartitions[partition.seat_number] = {
-            three_board_cards: partition.three_board_cards as unknown as string[],
+            three_board_cards:
+              partition.three_board_cards as unknown as string[],
             two_board_cards: partition.two_board_cards as unknown as string[],
             one_board_card: partition.one_board_card as unknown as string[],
           };
@@ -1160,8 +1181,12 @@ function evaluateWithConstraints(
   if (totalCards < 5) {
     try {
       const evaluated = evaluate({
-        holeCards: holeCards as unknown as Parameters<typeof evaluate>[0]["holeCards"],
-        communityCards: board as unknown as Parameters<typeof evaluate>[0]["communityCards"],
+        holeCards: holeCards as unknown as Parameters<
+          typeof evaluate
+        >[0]["holeCards"],
+        communityCards: board as unknown as Parameters<
+          typeof evaluate
+        >[0]["communityCards"],
         minimumHoleCards: minHole,
         maximumHoleCards: maxHole,
       });
@@ -1190,9 +1215,17 @@ function evaluateWithConstraints(
 
         try {
           const evaluated = evaluate({
-            holeCards: combo as unknown as Parameters<typeof evaluate>[0]["holeCards"],
+            holeCards: combo as unknown as Parameters<
+              typeof evaluate
+            >[0]["holeCards"],
           });
-          if (!best || compare(evaluated as Parameters<typeof compare>[0], best as Parameters<typeof compare>[0]) === -1) {
+          if (
+            !best ||
+            compare(
+              evaluated as Parameters<typeof compare>[0],
+              best as Parameters<typeof compare>[0],
+            ) === -1
+          ) {
             best = {
               strength: evaluated.strength,
               hand: evaluated.hand as unknown as string[],
@@ -1594,21 +1627,9 @@ export function endOfHandPayout321(
 
   potsToDistribute.forEach((pot) => {
     const eligibleSeats = pot.eligibleSeats;
-    const board1Winners = winnersForBoard(
-      evaluations,
-      "board1",
-      eligibleSeats,
-    );
-    const board2Winners = winnersForBoard(
-      evaluations,
-      "board2",
-      eligibleSeats,
-    );
-    const board3Winners = winnersForBoard(
-      evaluations,
-      "board3",
-      eligibleSeats,
-    );
+    const board1Winners = winnersForBoard(evaluations, "board1", eligibleSeats);
+    const board2Winners = winnersForBoard(evaluations, "board2", eligibleSeats);
+    const board3Winners = winnersForBoard(evaluations, "board3", eligibleSeats);
 
     const board1Seats =
       board1Winners.length > 0 ? board1Winners : eligibleSeats;

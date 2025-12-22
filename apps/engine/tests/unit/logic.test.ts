@@ -197,15 +197,21 @@ describe("Button and Action Order Logic", () => {
     });
 
     it("should advance from river to showdown (PLO)", () => {
-      expect(advancePhase("river", "double_board_bomb_pot_plo")).toBe("showdown");
+      expect(advancePhase("river", "double_board_bomb_pot_plo")).toBe(
+        "showdown",
+      );
     });
 
     it("should advance from showdown to complete (PLO)", () => {
-      expect(advancePhase("showdown", "double_board_bomb_pot_plo")).toBe("complete");
+      expect(advancePhase("showdown", "double_board_bomb_pot_plo")).toBe(
+        "complete",
+      );
     });
 
     it("should stay at complete (PLO)", () => {
-      expect(advancePhase("complete", "double_board_bomb_pot_plo")).toBe("complete");
+      expect(advancePhase("complete", "double_board_bomb_pot_plo")).toBe(
+        "complete",
+      );
     });
 
     it("should advance from river to partition (321)", () => {
