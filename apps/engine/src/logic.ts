@@ -2,12 +2,7 @@ import { randomBytes } from "crypto";
 import { ActionType, GamePhase } from "@poker/shared";
 import { shuffleDeck, shuffleDoubleDeck, needsTwoDecks } from "./deck.js";
 import type { GameStateRow, Room, RoomPlayer } from "./types.js";
-import {
-  compare,
-  evaluateOmaha,
-  evaluateHoldem,
-  evaluate,
-} from "@poker-apprentice/hand-evaluator";
+import { compare, evaluate } from "@poker-apprentice/hand-evaluator";
 
 export interface DealResult {
   gameState: Partial<GameStateRow>;
@@ -1089,31 +1084,116 @@ export function advancePhase(current: GamePhase, gameMode: string): GamePhase {
 }
 
 /**
+ * Return true if any rank appears more than 4 times in the 5-card hand.
+ * This guards against 5-of-a-kind in two-deck games, which the evaluator
+ * does not rank properly.
+ */
+function hasRankCountOver4(cards: string[]): boolean {
+  const counts = new Map<string, number>();
+  for (const card of cards) {
+    const rank = card[0];
+    counts.set(rank, (counts.get(rank) ?? 0) + 1);
+    if ((counts.get(rank) ?? 0) > 4) return true;
+  }
+  return false;
+}
+
+function combinations<T>(arr: T[], k: number): T[][] {
+  if (k === 0) return [[]];
+  if (k > arr.length) return [];
+  const result: T[][] = [];
+  const indices = Array.from({ length: k }, (_, i) => i);
+  const last = arr.length - 1;
+
+  while (true) {
+    result.push(indices.map((i) => arr[i]));
+    let i = k - 1;
+    while (i >= 0 && indices[i] === last - (k - 1 - i)) {
+      i -= 1;
+    }
+    if (i < 0) break;
+    indices[i] += 1;
+    for (let j = i + 1; j < k; j += 1) {
+      indices[j] = indices[j - 1] + 1;
+    }
+  }
+
+  return result;
+}
+
+function evaluateWithConstraints(
+  holeCards: string[],
+  board: string[],
+  minimumHoleCards: number,
+  maximumHoleCards: number,
+): { strength: number; hand: string[] } {
+  const totalCards = holeCards.length + board.length;
+  if (totalCards === 0) return { strength: 0, hand: [] };
+
+  const minHole = Math.max(0, minimumHoleCards);
+  const maxHole = Math.min(maximumHoleCards, holeCards.length, 5);
+  if (minHole > maxHole) return { strength: 0, hand: [] };
+
+  // Fast path when there aren't enough cards to form a 5-card hand.
+  if (totalCards < 5) {
+    try {
+      const evaluated = evaluate({
+        holeCards: holeCards as unknown as Parameters<typeof evaluate>[0]["holeCards"],
+        communityCards: board as unknown as Parameters<typeof evaluate>[0]["communityCards"],
+        minimumHoleCards: minHole,
+        maximumHoleCards: maxHole,
+      });
+      return {
+        strength: evaluated.strength,
+        hand: evaluated.hand as unknown as string[],
+      };
+    } catch {
+      return { strength: 0, hand: [] };
+    }
+  }
+
+  let best: { strength: number; hand: string[] } | null = null;
+
+  for (let holeCount = minHole; holeCount <= maxHole; holeCount += 1) {
+    const boardCount = 5 - holeCount;
+    if (boardCount < 0 || boardCount > board.length) continue;
+
+    const holeCombos = combinations(holeCards, holeCount);
+    const boardCombos = combinations(board, boardCount);
+
+    for (const holeCombo of holeCombos) {
+      for (const boardCombo of boardCombos) {
+        const combo = [...holeCombo, ...boardCombo];
+        if (hasRankCountOver4(combo)) continue;
+
+        try {
+          const evaluated = evaluate({
+            holeCards: combo as unknown as Parameters<typeof evaluate>[0]["holeCards"],
+          });
+          if (!best || compare(evaluated as Parameters<typeof compare>[0], best as Parameters<typeof compare>[0]) === -1) {
+            best = {
+              strength: evaluated.strength,
+              hand: evaluated.hand as unknown as string[],
+            };
+          }
+        } catch {
+          // Skip invalid combinations
+        }
+      }
+    }
+  }
+
+  return best ?? { strength: 0, hand: [] };
+}
+
+/**
  * Evaluate a single player's best hand for a given board (PLO rules)
  */
 function evaluatePlayerHand(
   holeCards: string[],
   board: string[],
 ): { strength: number; hand: string[] } {
-  try {
-    // Type assertion needed because evaluateOmaha expects specific card literal types
-    // but our cards come from the database as plain strings
-    const evaluated = evaluateOmaha({
-      holeCards: holeCards as unknown as Parameters<
-        typeof evaluateOmaha
-      >[0]["holeCards"],
-      communityCards: board as unknown as Parameters<
-        typeof evaluateOmaha
-      >[0]["communityCards"],
-    });
-    return {
-      strength: evaluated.strength,
-      hand: evaluated.hand,
-    };
-  } catch {
-    // Fallback: return worst possible hand if evaluation fails
-    return { strength: 0, hand: [] };
-  }
+  return evaluateWithConstraints(holeCards, board, 2, 2);
 }
 
 /**
@@ -1193,22 +1273,7 @@ function evaluateHoldemHand(
   holeCards: string[],
   board: string[],
 ): { strength: number; hand: string[] } {
-  try {
-    const evaluated = evaluateHoldem({
-      holeCards: holeCards as unknown as Parameters<
-        typeof evaluateHoldem
-      >[0]["holeCards"],
-      communityCards: board as unknown as Parameters<
-        typeof evaluateHoldem
-      >[0]["communityCards"],
-    });
-    return {
-      strength: evaluated.strength,
-      hand: evaluated.hand,
-    };
-  } catch {
-    return { strength: 0, hand: [] };
-  }
+  return evaluateWithConstraints(holeCards, board, 0, 2);
 }
 
 /**
@@ -1250,23 +1315,7 @@ function evaluate3BoardHand(
 ): { strength: number; hand: string[] } {
   if (holeCards.length !== 3) return { strength: 0, hand: [] };
   if (board.length !== 5) return { strength: 0, hand: [] };
-
-  try {
-    const result = evaluate({
-      holeCards: [...holeCards, ...board] as unknown as Parameters<
-        typeof evaluate
-      >[0]["holeCards"],
-      communityCards: [],
-      minimumHoleCards: 0,
-      maximumHoleCards: 5,
-    });
-    return {
-      strength: result.strength,
-      hand: result.hand as unknown as string[],
-    };
-  } catch {
-    return { strength: 0, hand: [] };
-  }
+  return evaluateWithConstraints(holeCards, board, 0, 3);
 }
 
 /**
@@ -1279,25 +1328,7 @@ function evaluate1BoardHand(
 ): { strength: number; hand: string[] } {
   if (holeCards.length !== 1) return { strength: 0, hand: [] };
   if (board.length !== 5) return { strength: 0, hand: [] };
-
-  try {
-    const result = evaluate({
-      holeCards: [holeCards[0]] as unknown as Parameters<
-        typeof evaluate
-      >[0]["holeCards"],
-      communityCards: board as unknown as Parameters<
-        typeof evaluate
-      >[0]["communityCards"],
-      minimumHoleCards: 1,
-      maximumHoleCards: 1,
-    });
-    return {
-      strength: result.strength,
-      hand: result.hand as unknown as string[],
-    };
-  } catch {
-    return { strength: 0, hand: [] };
-  }
+  return evaluateWithConstraints(holeCards, board, 1, 1);
 }
 
 /**
@@ -1308,6 +1339,47 @@ function evaluate1BoardHand(
  * @param board3 - 1-board community cards
  * @returns Winners for each board
  */
+type Evaluated321Hand = {
+  seatNumber: number;
+  board1: { strength: number; hand: string[] };
+  board2: { strength: number; hand: string[] };
+  board3: { strength: number; hand: string[] };
+};
+
+function evaluate321Hands(
+  playerPartitions: Array<{
+    seatNumber: number;
+    threeBoardCards: string[];
+    twoBoardCards: string[];
+    oneBoardCard: string[];
+  }>,
+  board1: string[],
+  board2: string[],
+  board3: string[],
+): Evaluated321Hand[] {
+  return playerPartitions.map((p) => ({
+    seatNumber: p.seatNumber,
+    board1: evaluate3BoardHand(p.threeBoardCards, board1), // 3-card holdem
+    board2: evaluatePlayerHand(p.twoBoardCards, board2), // PLO rules (exactly 2 cards)
+    board3: evaluate1BoardHand(p.oneBoardCard, board3), // 1+4 modified
+  }));
+}
+
+function winnersForBoard(
+  evaluations: Evaluated321Hand[],
+  boardKey: "board1" | "board2" | "board3",
+  eligibleSeats?: number[],
+): number[] {
+  const filtered = eligibleSeats
+    ? evaluations.filter((e) => eligibleSeats.includes(e.seatNumber))
+    : evaluations;
+  if (filtered.length === 0) return [];
+  const maxStrength = Math.max(...filtered.map((e) => e[boardKey].strength));
+  return filtered
+    .filter((e) => e[boardKey].strength === maxStrength)
+    .map((e) => e.seatNumber);
+}
+
 export function determine321Winners(
   playerPartitions: Array<{
     seatNumber: number;
@@ -1327,29 +1399,15 @@ export function determine321Winners(
     return { board1Winners: [], board2Winners: [], board3Winners: [] };
   }
 
-  // Evaluate each player on all 3 boards with appropriate rules
-  const evaluations = playerPartitions.map((p) => ({
-    seatNumber: p.seatNumber,
-    board1: evaluate3BoardHand(p.threeBoardCards, board1), // 3-card holdem
-    board2: evaluatePlayerHand(p.twoBoardCards, board2), // PLO
-    board3: evaluate1BoardHand(p.oneBoardCard, board3), // 1+4 modified
-  }));
-
-  // Find winners for each board
-  const maxStrength1 = Math.max(...evaluations.map((e) => e.board1.strength));
-  const board1Winners = evaluations
-    .filter((e) => e.board1.strength === maxStrength1)
-    .map((e) => e.seatNumber);
-
-  const maxStrength2 = Math.max(...evaluations.map((e) => e.board2.strength));
-  const board2Winners = evaluations
-    .filter((e) => e.board2.strength === maxStrength2)
-    .map((e) => e.seatNumber);
-
-  const maxStrength3 = Math.max(...evaluations.map((e) => e.board3.strength));
-  const board3Winners = evaluations
-    .filter((e) => e.board3.strength === maxStrength3)
-    .map((e) => e.seatNumber);
+  const evaluations = evaluate321Hands(
+    playerPartitions,
+    board1,
+    board2,
+    board3,
+  );
+  const board1Winners = winnersForBoard(evaluations, "board1");
+  const board2Winners = winnersForBoard(evaluations, "board2");
+  const board3Winners = winnersForBoard(evaluations, "board3");
 
   return { board1Winners, board2Winners, board3Winners };
 }
@@ -1480,17 +1538,26 @@ export function endOfHandPayout(
  */
 export function endOfHandPayout321(
   sidePots: Array<{ amount: number; eligibleSeats: number[] }>,
-  board1Winners: number[],
-  board2Winners: number[],
-  board3Winners: number[],
+  playerPartitions: Array<{
+    seatNumber: number;
+    threeBoardCards: string[];
+    twoBoardCards: string[];
+    oneBoardCard: string[];
+  }>,
+  board1: string[],
+  board2: string[],
+  board3: string[],
 ): { seat: number; amount: number }[] {
-  if (
-    board1Winners.length === 0 &&
-    board2Winners.length === 0 &&
-    board3Winners.length === 0
-  ) {
+  if (playerPartitions.length === 0) {
     return [];
   }
+
+  const evaluations = evaluate321Hands(
+    playerPartitions,
+    board1,
+    board2,
+    board3,
+  );
 
   const payouts: Map<number, number> = new Map();
   const potsToDistribute =
@@ -1499,30 +1566,34 @@ export function endOfHandPayout321(
       : [
           {
             amount: 0,
-            eligibleSeats: Array.from(
-              new Set([...board1Winners, ...board2Winners, ...board3Winners]),
-            ),
+            eligibleSeats: evaluations.map((e) => e.seatNumber),
           },
         ];
 
   potsToDistribute.forEach((pot) => {
-    const eligibleBoard1 = board1Winners.filter((seat) =>
-      pot.eligibleSeats.includes(seat),
+    const eligibleSeats = pot.eligibleSeats;
+    const board1Winners = winnersForBoard(
+      evaluations,
+      "board1",
+      eligibleSeats,
     );
-    const eligibleBoard2 = board2Winners.filter((seat) =>
-      pot.eligibleSeats.includes(seat),
+    const board2Winners = winnersForBoard(
+      evaluations,
+      "board2",
+      eligibleSeats,
     );
-    const eligibleBoard3 = board3Winners.filter((seat) =>
-      pot.eligibleSeats.includes(seat),
+    const board3Winners = winnersForBoard(
+      evaluations,
+      "board3",
+      eligibleSeats,
     );
 
-    // Default to all eligible if no winners on a board
     const board1Seats =
-      eligibleBoard1.length > 0 ? eligibleBoard1 : pot.eligibleSeats;
+      board1Winners.length > 0 ? board1Winners : eligibleSeats;
     const board2Seats =
-      eligibleBoard2.length > 0 ? eligibleBoard2 : pot.eligibleSeats;
+      board2Winners.length > 0 ? board2Winners : eligibleSeats;
     const board3Seats =
-      eligibleBoard3.length > 0 ? eligibleBoard3 : pot.eligibleSeats;
+      board3Winners.length > 0 ? board3Winners : eligibleSeats;
 
     // Split pot into thirds (with rounding)
     const third = Math.floor(pot.amount / 3);

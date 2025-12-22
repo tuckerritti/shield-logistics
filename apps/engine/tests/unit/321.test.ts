@@ -427,7 +427,38 @@ describe("321 game mode", () => {
   describe("endOfHandPayout321", () => {
     it("should split each pot into thirds and respect board ties", () => {
       const sidePots = [{ amount: 300, eligibleSeats: [1, 2, 3] }];
-      const payouts = endOfHandPayout321(sidePots, [1], [2, 3], [3]);
+      const board1 = ["Ah", "Kh", "Qh", "Jh", "2c"];
+      const board2 = ["2c", "3c", "4c", "5c", "9d"];
+      const board3 = ["As", "Ks", "Qs", "Js", "9d"];
+
+      const partitions = [
+        {
+          seatNumber: 1,
+          threeBoardCards: ["Th", "9h", "8h"],
+          twoBoardCards: ["2d", "3d"],
+          oneBoardCard: ["2c"],
+        },
+        {
+          seatNumber: 2,
+          threeBoardCards: ["9d", "8d", "7d"],
+          twoBoardCards: ["6c", "7c"],
+          oneBoardCard: ["8d"],
+        },
+        {
+          seatNumber: 3,
+          threeBoardCards: ["9s", "8s", "7s"],
+          twoBoardCards: ["6c", "7c"],
+          oneBoardCard: ["Ts"],
+        },
+      ];
+
+      const payouts = endOfHandPayout321(
+        sidePots,
+        partitions,
+        board1,
+        board2,
+        board3,
+      );
 
       expect(payouts).toContainEqual({ seat: 1, amount: 100 });
       expect(payouts).toContainEqual({ seat: 2, amount: 50 });
@@ -437,7 +468,32 @@ describe("321 game mode", () => {
 
     it("should give the remainder to board3 winners and split it evenly", () => {
       const sidePots = [{ amount: 101, eligibleSeats: [1, 2] }];
-      const payouts = endOfHandPayout321(sidePots, [1], [2], [1, 2]);
+      const board1 = ["Ah", "Kh", "Qh", "Jh", "2c"];
+      const board2 = ["2c", "3c", "4c", "5c", "9d"];
+      const board3 = ["As", "Ks", "Qs", "Js", "9d"];
+
+      const partitions = [
+        {
+          seatNumber: 1,
+          threeBoardCards: ["Th", "9h", "8h"],
+          twoBoardCards: ["2d", "3d"],
+          oneBoardCard: ["Ts"],
+        },
+        {
+          seatNumber: 2,
+          threeBoardCards: ["9d", "8d", "7d"],
+          twoBoardCards: ["6c", "7c"],
+          oneBoardCard: ["Ts"],
+        },
+      ];
+
+      const payouts = endOfHandPayout321(
+        sidePots,
+        partitions,
+        board1,
+        board2,
+        board3,
+      );
 
       const seat1 = payouts.find((p) => p.seat === 1)?.amount ?? 0;
       const seat2 = payouts.find((p) => p.seat === 2)?.amount ?? 0;
@@ -447,12 +503,43 @@ describe("321 game mode", () => {
       expect(seat1 + seat2).toBe(101);
     });
 
-    it("should fall back to eligible seats when a board winner is not eligible", () => {
+    it("should calculate winners within side pot eligibility", () => {
       const sidePots = [{ amount: 90, eligibleSeats: [1, 2] }];
-      const payouts = endOfHandPayout321(sidePots, [3], [2], [1]);
+      const board1 = ["9h", "Th", "Jh", "2c", "3d"];
+      const board2 = ["2c", "3c", "4c", "5c", "9d"];
+      const board3 = ["As", "Ks", "Qs", "Js", "9d"];
 
-      expect(payouts).toContainEqual({ seat: 1, amount: 45 });
-      expect(payouts).toContainEqual({ seat: 2, amount: 45 });
+      const partitions = [
+        {
+          seatNumber: 1,
+          threeBoardCards: ["9d", "8d", "7d"],
+          twoBoardCards: ["2d", "3d"],
+          oneBoardCard: ["Ts"],
+        },
+        {
+          seatNumber: 2,
+          threeBoardCards: ["8h", "7h", "6h"],
+          twoBoardCards: ["6c", "7c"],
+          oneBoardCard: ["8d"],
+        },
+        {
+          seatNumber: 3,
+          threeBoardCards: ["Qh", "Kh", "Ah"],
+          twoBoardCards: ["2h", "3h"],
+          oneBoardCard: ["2c"],
+        },
+      ];
+
+      const payouts = endOfHandPayout321(
+        sidePots,
+        partitions,
+        board1,
+        board2,
+        board3,
+      );
+
+      expect(payouts).toContainEqual({ seat: 1, amount: 30 });
+      expect(payouts).toContainEqual({ seat: 2, amount: 60 });
       expect(payouts.reduce((sum, p) => sum + p.amount, 0)).toBe(90);
     });
   });

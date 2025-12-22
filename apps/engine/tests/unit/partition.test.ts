@@ -30,7 +30,32 @@ describe("321 partition showdown", () => {
 
   it("should split pot into thirds with remainder to board3 winners", () => {
     const sidePots = [{ amount: 100, eligibleSeats: [1, 2] }];
-    const payouts = endOfHandPayout321(sidePots, [1], [2], [2]);
+    const board1 = ["Ah", "Kh", "Qh", "Jh", "2c"];
+    const board2 = ["2c", "3c", "4c", "5c", "9d"];
+    const board3 = ["As", "Ks", "Qs", "Js", "9d"];
+
+    const partitions = [
+      {
+        seatNumber: 1,
+        threeBoardCards: ["Th", "9h", "8h"],
+        twoBoardCards: ["2d", "3d"],
+        oneBoardCard: ["8d"],
+      },
+      {
+        seatNumber: 2,
+        threeBoardCards: ["9d", "8d", "7d"],
+        twoBoardCards: ["6c", "7c"],
+        oneBoardCard: ["Ts"],
+      },
+    ];
+
+    const payouts = endOfHandPayout321(
+      sidePots,
+      partitions,
+      board1,
+      board2,
+      board3,
+    );
 
     expect(payouts).toContainEqual({ seat: 1, amount: 33 });
     expect(payouts).toContainEqual({ seat: 2, amount: 67 });

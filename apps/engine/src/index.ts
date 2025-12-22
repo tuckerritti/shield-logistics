@@ -929,7 +929,12 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
       },
       { onConflict: "game_state_id,seat_number" },
     );
-    if (upsertErr) throw upsertErr;
+    if (upsertErr) {
+      if (upsertErr.message?.includes("hand already completed")) {
+        return res.status(409).json({ error: "Hand already completed" });
+      }
+      throw upsertErr;
+    }
 
     // Check submission progress
     const requiredSeats = players
@@ -979,9 +984,10 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
 
     const payouts = endOfHandPayout321(
       sidePots,
-      board1Winners,
-      board2Winners,
-      board3Winners,
+      partitions,
+      board1,
+      board2,
+      board3,
     );
 
     // Mark hand complete (guard against double-finalization)
