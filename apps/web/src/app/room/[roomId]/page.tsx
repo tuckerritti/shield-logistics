@@ -48,8 +48,8 @@ export default function RoomPage({
   const [showdownProgress, setShowdownProgress] = useState(1);
   const [showdownTransitionMs, setShowdownTransitionMs] = useState(0);
   const [partitionAssignment, setPartitionAssignment] = useState<
-    Record<string, "board1" | "board2" | "board3">
-  >({});
+    Array<"board1" | "board2" | "board3">
+  >([]);
   const [partitionSubmitting, setPartitionSubmitting] = useState(false);
   const [partitionStatus, setPartitionStatus] = useState<string | null>(null);
   const [partitionError, setPartitionError] = useState<string | null>(null);
@@ -189,7 +189,7 @@ export default function RoomPage({
       return;
     }
 
-    let rafId = requestAnimationFrame(() => {
+    const rafId = requestAnimationFrame(() => {
       setShowdownTransitionMs(remainingMs);
       setShowdownProgress(0);
     });
@@ -538,17 +538,17 @@ export default function RoomPage({
   // Default partition assignment (first 3 / next 2 / last 1)
   useEffect(() => {
     if (myHoleCards.length !== 6) {
-      setPartitionAssignment({});
+      setPartitionAssignment([]);
       return;
     }
-    setPartitionAssignment({
-      [myHoleCards[0]]: "board1",
-      [myHoleCards[1]]: "board1",
-      [myHoleCards[2]]: "board1",
-      [myHoleCards[3]]: "board2",
-      [myHoleCards[4]]: "board2",
-      [myHoleCards[5]]: "board3",
-    });
+    setPartitionAssignment([
+      "board1",
+      "board1",
+      "board1",
+      "board2",
+      "board2",
+      "board3",
+    ]);
   }, [myHoleCards]);
 
   // Get community cards and visible player cards from board_state JSONB
@@ -685,8 +685,8 @@ export default function RoomPage({
     const b1: string[] = [];
     const b2: string[] = [];
     const b3: string[] = [];
-    myHoleCards.forEach((card) => {
-      const dest = partitionAssignment[card];
+    myHoleCards.forEach((card, index) => {
+      const dest = partitionAssignment[index];
       if (dest === "board1") b1.push(card);
       else if (dest === "board2") b2.push(card);
       else if (dest === "board3") b3.push(card);
@@ -1059,8 +1059,8 @@ export default function RoomPage({
 
               {/* Grid of selectable cards with assignment buttons */}
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
-              {myHoleCards.map((card) => {
-                const assignment = partitionAssignment[card];
+              {myHoleCards.map((card, index) => {
+                const assignment = partitionAssignment[index];
                 const buttonClass = (dest: "board1" | "board2" | "board3") =>
                   `px-2 py-1 rounded-md border text-xs font-semibold transition ${
                     assignment === dest
@@ -1070,7 +1070,7 @@ export default function RoomPage({
 
                 return (
                   <div
-                    key={card}
+                    key={`${card}-${index}`}
                     className="flex w-full flex-col items-center gap-1 rounded-lg border border-white/10 bg-black/30 p-1 sm:p-1.5"
                   >
                     <Card card={card} size="md" />
@@ -1079,10 +1079,11 @@ export default function RoomPage({
                         type="button"
                         className={buttonClass("board3")}
                         onClick={() =>
-                          setPartitionAssignment((prev) => ({
-                            ...prev,
-                            [card]: "board3",
-                          }))
+                          setPartitionAssignment((prev) => {
+                            const next = [...prev];
+                            next[index] = "board3";
+                            return next;
+                          })
                         }
                       >
                         1
@@ -1091,10 +1092,11 @@ export default function RoomPage({
                         type="button"
                         className={buttonClass("board2")}
                         onClick={() =>
-                          setPartitionAssignment((prev) => ({
-                            ...prev,
-                            [card]: "board2",
-                          }))
+                          setPartitionAssignment((prev) => {
+                            const next = [...prev];
+                            next[index] = "board2";
+                            return next;
+                          })
                         }
                       >
                         2
@@ -1103,10 +1105,11 @@ export default function RoomPage({
                         type="button"
                         className={buttonClass("board1")}
                         onClick={() =>
-                          setPartitionAssignment((prev) => ({
-                            ...prev,
-                            [card]: "board1",
-                          }))
+                          setPartitionAssignment((prev) => {
+                            const next = [...prev];
+                            next[index] = "board1";
+                            return next;
+                          })
                         }
                       >
                         3

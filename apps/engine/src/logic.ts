@@ -1282,12 +1282,14 @@ function evaluate1BoardHand(
 
   try {
     const result = evaluate({
-      holeCards: [holeCards[0], ...board] as unknown as Parameters<
+      holeCards: [holeCards[0]] as unknown as Parameters<
         typeof evaluate
       >[0]["holeCards"],
-      communityCards: [],
-      minimumHoleCards: 0,
-      maximumHoleCards: 5,
+      communityCards: board as unknown as Parameters<
+        typeof evaluate
+      >[0]["communityCards"],
+      minimumHoleCards: 1,
+      maximumHoleCards: 1,
     });
     return {
       strength: result.strength,
@@ -1473,7 +1475,6 @@ export function endOfHandPayout(
 }
 
 /**
-<<<<<<< HEAD
  * Distribute pot for 321 mode (3-way split)
  * Each board gets 1/3 of each pot. Scoop = player wins all 3 boards.
  */

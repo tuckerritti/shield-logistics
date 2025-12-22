@@ -881,14 +881,34 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
       ...payload.oneBoardCard,
     ];
 
-    const allUnique = new Set(submittedCards);
-    if (submittedCards.length !== 6 || allUnique.size !== 6) {
-      return res.status(400).json({ error: "Partitions must contain 6 unique cards" });
+    if (submittedCards.length !== 6) {
+      return res.status(400).json({ error: "Partition must contain exactly 6 cards" });
     }
 
-    const handSet = new Set(playerCards);
-    const missing = submittedCards.filter((c) => !handSet.has(c));
-    if (missing.length > 0 || handSet.size !== 6) {
+    if (playerCards.length !== 6) {
+      return res
+        .status(400)
+        .json({ error: "Partition must use exactly the player's 6 hole cards" });
+    }
+
+    const remaining = new Map<string, number>();
+    playerCards.forEach((card) => {
+      remaining.set(card, (remaining.get(card) ?? 0) + 1);
+    });
+
+    let invalidCard: string | null = null;
+    submittedCards.forEach((card) => {
+      if (invalidCard) return;
+      const count = remaining.get(card) ?? 0;
+      if (count <= 0) {
+        invalidCard = card;
+        return;
+      }
+      remaining.set(card, count - 1);
+    });
+
+    const hasRemainder = Array.from(remaining.values()).some((count) => count !== 0);
+    if (invalidCard || hasRemainder) {
       return res
         .status(400)
         .json({ error: "Partition must use exactly the player's 6 hole cards" });
@@ -964,36 +984,9 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
       board3Winners,
     );
 
-    // Credit winners
-    if (payouts.length) {
-      const creditUpdates = payouts
-        .map((p) => {
-          const player = players.find((pl) => pl.seat_number === p.seat);
-          return player
-            ? {
-                id: player.id,
-                room_id: player.room_id,
-                seat_number: player.seat_number,
-                auth_user_id: player.auth_user_id,
-                display_name: player.display_name,
-                total_buy_in: player.total_buy_in,
-                chip_stack: (player.chip_stack ?? 0) + p.amount,
-              }
-            : null;
-        })
-        .filter(Boolean) as Partial<RoomPlayer>[];
-
-      if (creditUpdates.length) {
-        const { error: creditErr } = await supabase
-          .from("room_players")
-          .upsert(creditUpdates);
-        if (creditErr) throw creditErr;
-      }
-    }
-
     // Mark hand complete (guard against double-finalization)
     const completionTime = new Date().toISOString();
-    const { error: gsUpdateErr } = await supabase
+    const { data: updatedRows, error: gsUpdateErr } = await supabase
       .from("game_states")
       .update({
         phase: "complete",
@@ -1026,58 +1019,97 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
                 two_board_cards: p.twoBoardCards,
                 one_board_card: p.oneBoardCard,
               }
-            ])
-          )
+            ]),
+          ),
         },
         side_pots: sidePots,
       })
       .eq("id", gameState.id)
-      .is("hand_completed_at", null);
+      .is("hand_completed_at", null)
+      .select("id");
 
-    // If another request already finalized, avoid duplicating results
-    const alreadyCompleted = gsUpdateErr?.code === "PGRST116";
-    if (gsUpdateErr && !alreadyCompleted) {
+    if (gsUpdateErr) {
       throw gsUpdateErr;
     }
 
-    // Record hand result only if we just marked completion
-    if (!alreadyCompleted) {
-      const { error: resultsErr } = await supabase.from("hand_results").insert({
-        room_id: roomId,
-        hand_number: gameState.hand_number,
-        final_pot: gameState.pot_size ?? 0,
-        board_a: board1 ?? null,
-        board_b: board2 ?? null,
-        board_c: board3 ?? null,
-        winners: payouts.map((p) => p.seat),
-        action_history: gameState.action_history,
-        shown_hands: null,
+    // If another request already finalized, avoid duplicating results
+    const alreadyCompleted = !updatedRows || updatedRows.length === 0;
+    if (alreadyCompleted) {
+      return res.json({
+        ok: true,
+        completed: true,
+        winners: {
+          board1: board1Winners,
+          board2: board2Winners,
+          board3: board3Winners,
+        },
+        payouts,
       });
-      if (resultsErr) throw resultsErr;
+    }
 
-      // Auto-pause heads-up bust / pause-after-hand logic (reuse applyAction rules)
-      const finalPlayers = players.map((p) => {
-        const credit = payouts.find((c) => c.seat === p.seat_number);
-        return credit ? { ...p, chip_stack: (p.chip_stack ?? 0) + credit.amount } : p;
-      });
-      const activeSeated = finalPlayers.filter(
-        (p) => !p.is_spectating && !p.is_sitting_out,
-      );
-      const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
-      const shouldAutoPause =
-        activeSeated.length === 2 && withChips.length === 1;
+    // Credit winners after the completion write succeeds
+    if (payouts.length) {
+      const creditUpdates = payouts
+        .map((p) => {
+          const player = players.find((pl) => pl.seat_number === p.seat);
+          return player
+            ? {
+                id: player.id,
+                room_id: player.room_id,
+                seat_number: player.seat_number,
+                auth_user_id: player.auth_user_id,
+                display_name: player.display_name,
+                total_buy_in: player.total_buy_in,
+                chip_stack: (player.chip_stack ?? 0) + p.amount,
+              }
+            : null;
+        })
+        .filter(Boolean) as Partial<RoomPlayer>[];
 
-      if (shouldAutoPause || room.pause_after_hand) {
-        const { error: pauseErr } = await supabase
-          .from("rooms")
-          .update({
-            is_paused: true,
-            pause_after_hand: false,
-            last_activity_at: new Date().toISOString(),
-          })
-          .eq("id", roomId);
-        if (pauseErr) throw pauseErr;
+      if (creditUpdates.length) {
+        const { error: creditErr } = await supabase
+          .from("room_players")
+          .upsert(creditUpdates);
+        if (creditErr) throw creditErr;
       }
+    }
+
+    // Record hand result only if we just marked completion
+    const { error: resultsErr } = await supabase.from("hand_results").insert({
+      room_id: roomId,
+      hand_number: gameState.hand_number,
+      final_pot: gameState.pot_size ?? 0,
+      board_a: board1 ?? null,
+      board_b: board2 ?? null,
+      board_c: board3 ?? null,
+      winners: payouts.map((p) => p.seat),
+      action_history: gameState.action_history,
+      shown_hands: null,
+    });
+    if (resultsErr) throw resultsErr;
+
+    // Auto-pause heads-up bust / pause-after-hand logic (reuse applyAction rules)
+    const finalPlayers = players.map((p) => {
+      const credit = payouts.find((c) => c.seat === p.seat_number);
+      return credit ? { ...p, chip_stack: (p.chip_stack ?? 0) + credit.amount } : p;
+    });
+    const activeSeated = finalPlayers.filter(
+      (p) => !p.is_spectating && !p.is_sitting_out,
+    );
+    const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
+    const shouldAutoPause =
+      activeSeated.length === 2 && withChips.length === 1;
+
+    if (shouldAutoPause || room.pause_after_hand) {
+      const { error: pauseErr } = await supabase
+        .from("rooms")
+        .update({
+          is_paused: true,
+          pause_after_hand: false,
+          last_activity_at: new Date().toISOString(),
+        })
+        .eq("id", roomId);
+      if (pauseErr) throw pauseErr;
     }
 
     res.json({

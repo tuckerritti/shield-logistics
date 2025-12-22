@@ -95,11 +95,15 @@ export class HandCompletionCleanup {
   }
 
   private async performCleanup(): Promise<void> {
+    const now = Date.now();
+    const minCutoffTime = new Date(now - HAND_COMPLETE_DELAY_MS).toISOString();
+
     // Find all completed game_states with room info to check game mode
     const { data: completedHands, error: queryErr } = await supabase
       .from("game_states")
       .select("id, room_id, hand_number, hand_completed_at, rooms!inner(game_mode)")
-      .not("hand_completed_at", "is", null);
+      .not("hand_completed_at", "is", null)
+      .lte("hand_completed_at", minCutoffTime);
 
     if (queryErr) {
       logger.error({ err: queryErr }, "Failed to query completed hands");
@@ -118,7 +122,6 @@ export class HandCompletionCleanup {
     }
 
     // Filter hands that have exceeded their game-mode-specific delay
-    const now = Date.now();
     const handsToDelete = completedHands.filter((hand) => {
       const completedAt = new Date(hand.hand_completed_at as string).getTime();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
