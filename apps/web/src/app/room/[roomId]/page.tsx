@@ -1032,7 +1032,10 @@ export default function RoomPage({
                     <Card key={idx} card={card} size="md" />
                   ))}
                   {Array.from({ length: 3 - partitionBoards.b1.length }).map((_, idx) => (
-                    <div key={`empty-b1-${idx}`} className="w-12 h-16 sm:w-14 sm:h-20 border border-dashed border-whiskey-gold/30 rounded" />
+                    <div
+                      key={`empty-b1-${idx}`}
+                      className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
+                    />
                   ))}
                 </div>
 
@@ -1042,7 +1045,10 @@ export default function RoomPage({
                     <Card key={idx} card={card} size="md" />
                   ))}
                   {Array.from({ length: 2 - partitionBoards.b2.length }).map((_, idx) => (
-                    <div key={`empty-b2-${idx}`} className="w-12 h-16 sm:w-14 sm:h-20 border border-dashed border-whiskey-gold/30 rounded" />
+                    <div
+                      key={`empty-b2-${idx}`}
+                      className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
+                    />
                   ))}
                 </div>
 
@@ -1052,7 +1058,10 @@ export default function RoomPage({
                     <Card key={idx} card={card} size="md" />
                   ))}
                   {Array.from({ length: 1 - partitionBoards.b3.length }).map((_, idx) => (
-                    <div key={`empty-b3-${idx}`} className="w-12 h-16 sm:w-14 sm:h-20 border border-dashed border-whiskey-gold/30 rounded" />
+                    <div
+                      key={`empty-b3-${idx}`}
+                      className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
+                    />
                   ))}
                 </div>
               </div>
