@@ -9,7 +9,6 @@ import { useLatestHandResult } from "@/lib/hooks/useLatestHandResult";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { ActionPanel } from "@/components/poker/ActionPanel";
 import { PokerTable } from "@/components/poker/PokerTable";
-import { BoardWinners } from "@/components/poker/BoardWinners";
 import { Card } from "@/components/poker/Card";
 import type { Room, BoardState } from "@/types/database";
 import { engineFetch, safeEngineUrl } from "@/lib/engineClient";
@@ -903,6 +902,9 @@ export default function RoomPage({
             playerPartitions={playerPartitionsForDisplay}
             showdownProgress={isShowdownPhase ? showdownProgress : null}
             showdownTransitionMs={isShowdownPhase ? showdownTransitionMs : 0}
+            board1Winners={isShowdownPhase ? board1Winners : null}
+            board2Winners={isShowdownPhase ? board2Winners : null}
+            board3Winners={isShowdownPhase ? board3Winners : null}
             onSeatClick={handleSeatClick}
           />
         </div>
@@ -966,17 +968,6 @@ export default function RoomPage({
           </div>
         </div>
       )}
-
-      {(gameState?.phase === "showdown" || gameState?.phase === "complete") &&
-        handResult && (
-          <BoardWinners
-            board1Winners={board1Winners}
-            board2Winners={board2Winners}
-            board3Winners={board3Winners}
-            gameMode={room?.game_mode}
-            players={activePlayers}
-          />
-        )}
 
       {/* Partition assignment for 321 mode */}
       {canPartition && (
