@@ -345,6 +345,62 @@ export type Database = {
           },
         ]
       }
+      player_sessions: {
+        Row: {
+          auth_user_id: string | null
+          created_at: string
+          display_name: string
+          final_chip_stack: number
+          hands_played: number
+          id: string
+          joined_at: string
+          left_at: string
+          left_during_hand: boolean
+          net_profit_loss: number
+          room_id: string
+          seat_number: number
+          total_buy_in: number
+        }
+        Insert: {
+          auth_user_id?: string | null
+          created_at?: string
+          display_name: string
+          final_chip_stack?: number
+          hands_played?: number
+          id?: string
+          joined_at?: string
+          left_at?: string
+          left_during_hand?: boolean
+          net_profit_loss?: number
+          room_id: string
+          seat_number: number
+          total_buy_in?: number
+        }
+        Update: {
+          auth_user_id?: string | null
+          created_at?: string
+          display_name?: string
+          final_chip_stack?: number
+          hands_played?: number
+          id?: string
+          joined_at?: string
+          left_at?: string
+          left_during_hand?: boolean
+          net_profit_loss?: number
+          room_id?: string
+          seat_number?: number
+          total_buy_in?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_sessions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_players: {
         Row: {
           auth_user_id: string | null
@@ -362,6 +418,7 @@ export type Database = {
           seat_number: number
           total_buy_in: number
           total_invested_this_hand: number | null
+          waiting_for_next_hand: boolean
         }
         Insert: {
           auth_user_id?: string | null
@@ -379,6 +436,7 @@ export type Database = {
           seat_number: number
           total_buy_in?: number
           total_invested_this_hand?: number | null
+          waiting_for_next_hand?: boolean
         }
         Update: {
           auth_user_id?: string | null
@@ -396,6 +454,7 @@ export type Database = {
           seat_number?: number
           total_buy_in?: number
           total_invested_this_hand?: number | null
+          waiting_for_next_hand?: boolean
         }
         Relationships: [
           {
@@ -642,4 +701,3 @@ export const Constants = {
     },
   },
 } as const
-

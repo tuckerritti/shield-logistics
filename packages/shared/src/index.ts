@@ -77,6 +77,10 @@ export interface ActionHistoryItem {
   timestamp: string;
 }
 
+export interface LeaveRequestPayload {
+  seatNumber: number;
+}
+
 export interface PartitionSubmissionPayload {
   roomId: string;
   seatNumber: number;
