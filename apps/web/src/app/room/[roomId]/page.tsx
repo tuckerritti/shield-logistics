@@ -483,10 +483,6 @@ export default function RoomPage({
         return;
       }
 
-      // Show feedback for scheduled pause
-      if (data.pauseScheduled) {
-        alert("Game will pause after this hand completes");
-      }
       // Real-time subscription will update UI automatically
     } catch (error) {
       console.error("Error toggling pause:", error);
