@@ -416,15 +416,10 @@ export function PokerTable({
             ? "z-50"
             : "z-10";
 
-        // Winner/loser status for showdown phase only
+        // Winner status for showdown phase only
         const isShowdown = phase === "showdown";
         const winnerStatus =
           isShowdown && !isEmpty ? getWinnerStatus(seatNumber) : null;
-        const isLoser =
-          isShowdown &&
-          !isEmpty &&
-          !player.has_folded &&
-          !winnerStatus?.isWinner;
 
         if (shouldHideEmptySeats && isEmpty) {
           return null;
@@ -452,11 +447,9 @@ export function PokerTable({
                     ? "border-white/20 bg-black/40"
                     : winnerStatus?.isWinner
                       ? "border-green-500/30 bg-green-900/25"
-                      : isLoser
-                        ? "border-red-500/30 bg-red-900/25"
-                        : isMyPlayer
-                          ? "border-whiskey-gold bg-whiskey-gold/20"
-                          : "border-white/20 bg-black/40"
+                      : isMyPlayer
+                        ? "border-whiskey-gold bg-whiskey-gold/20"
+                        : "border-white/20 bg-black/40"
               } ${
                 isCurrentActor
                   ? "ring-2 sm:ring-4 ring-whiskey-gold ring-offset-1 sm:ring-offset-2 ring-offset-royal-blue glow-gold"
@@ -484,12 +477,10 @@ export function PokerTable({
                     className="mt-0.5 text-xs sm:text-sm font-bold"
                     style={{ fontFamily: "Lato, sans-serif" }}
                   >
-                    {winnerStatus?.isWinner ? (
+                    {isShowdown && winnerStatus?.isWinner ? (
                       <span className="text-green-400">
                         {winnerStatus.displayText}
                       </span>
-                    ) : isShowdownPhase && !player.has_folded ? (
-                      <span className="text-red-400">Lost</span>
                     ) : (
                       <span
                         className="text-whiskey-gold"
