@@ -8,7 +8,8 @@ type GameMode =
   | "double_board_bomb_pot_plo"
   | "texas_holdem"
   | "indian_poker"
-  | "game_mode_321";
+  | "game_mode_321"
+  | "holdem_flip";
 
 interface GameModeConfig {
   id: GameMode;
@@ -42,6 +43,12 @@ const GAME_MODES: GameModeConfig[] = [
     enabled: true,
     description: "6 hole cards, 3 boards, partition cards after river",
   },
+  {
+    id: "holdem_flip",
+    name: "Hold'em Flip",
+    enabled: true,
+    description: "2 hole cards, 5 community cards, take turns flipping cards",
+  },
 ];
 
 export default function Home() {
@@ -72,7 +79,7 @@ export default function Home() {
     if (mode === "texas_holdem") {
       return { smallBlind, bigBlind };
     }
-    // PLO/Indian Poker/321 bomb pots: big blind value is the ante; SB set to 0
+    // PLO/Indian Poker/321/Holdem Flip bomb pots: big blind value is the ante; SB set to 0
     return { smallBlind: 0, bigBlind: ploAnte };
   };
 
