@@ -1003,11 +1003,9 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
     }
 
     if (playerCards.length !== 6) {
-      return res
-        .status(400)
-        .json({
-          error: "Partition must use exactly the player's 6 hole cards",
-        });
+      return res.status(400).json({
+        error: "Partition must use exactly the player's 6 hole cards",
+      });
     }
 
     const remaining = new Map<string, number>();
@@ -1030,11 +1028,9 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
       (count) => count !== 0,
     );
     if (invalidCard || hasRemainder) {
-      return res
-        .status(400)
-        .json({
-          error: "Partition must use exactly the player's 6 hole cards",
-        });
+      return res.status(400).json({
+        error: "Partition must use exactly the player's 6 hole cards",
+      });
     }
 
     const now = new Date().toISOString();
@@ -1239,10 +1235,7 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
         : p;
     });
     const activeSeated = finalPlayers.filter(
-      (p) =>
-        !p.is_spectating &&
-        !p.is_sitting_out &&
-        !p.waiting_for_next_hand,
+      (p) => !p.is_spectating && !p.is_sitting_out && !p.waiting_for_next_hand,
     );
     const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
     const shouldAutoPause = activeSeated.length === 2 && withChips.length === 1;
