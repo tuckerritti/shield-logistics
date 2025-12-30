@@ -354,41 +354,6 @@ export type Database = {
           },
         ]
       }
-      room_members: {
-        Row: {
-          anon_session_id: string | null
-          auth_user_id: string | null
-          id: string
-          is_active: boolean
-          joined_at: string
-          room_id: string
-        }
-        Insert: {
-          anon_session_id?: string | null
-          auth_user_id?: string | null
-          id?: string
-          is_active?: boolean
-          joined_at?: string
-          room_id: string
-        }
-        Update: {
-          anon_session_id?: string | null
-          auth_user_id?: string | null
-          id?: string
-          is_active?: boolean
-          joined_at?: string
-          room_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "room_members_room_id_fkey"
-            columns: ["room_id"]
-            isOneToOne: false
-            referencedRelation: "rooms"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       room_players: {
         Row: {
           auth_user_id: string | null
@@ -522,14 +487,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_indian_poker_visible_cards: {
-        Args: { game_state_id_param: string; requesting_seat_number: number }
-        Returns: {
-          seat_number: number
-          visible_card: string
-        }[]
-      }
-      is_room_member: { Args: { room_id_param: string }; Returns: boolean }
+      [_ in never]: never
     }
     Enums: {
       action_type: "fold" | "check" | "call" | "bet" | "raise" | "all_in"
