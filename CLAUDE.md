@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a **Double Board Bomb Pot PLO (Pot-Limit Omaha)** poker application built as a Turborepo monorepo. The architecture separates game logic into an Express engine service and a Next.js web frontend, with Supabase providing database and real-time subscriptions.
 
+We want the simplest change possible. We don't care about migration. Code readability matters most, and we're happy to make bigger changes to achieve it.
+
 **Key Innovation:** Security-first architecture where hole cards are stored server-side in RLS-protected tables, preventing players from seeing each other's hands via client-side manipulation.
 
 ## Development Commands
@@ -25,6 +27,13 @@ npm run lint --workspace apps/web     # Web lint only
 # Code Formatting
 npm run format                        # Format code with Prettier
 npm run format:check                  # Check formatting without writing
+
+# Testing
+npm run test                          # Run all tests (Turbo)
+npm run test --workspace apps/engine  # Run engine tests (Vitest)
+npm run test:watch --workspace apps/engine  # Watch mode
+npm run test:coverage --workspace apps/engine  # Coverage report
+npm run test:unit --workspace apps/engine  # Unit tests only
 
 # Supabase
 npm run update-types                  # Generate TypeScript types from local Supabase
@@ -290,7 +299,8 @@ const cards = playerHand.cards as unknown as string[];
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ENGINE_PORT=3001
-CORS_ORIGIN=http://localhost:3000
+NODE_ENV=development
+ENGINE_CORS_ORIGIN=http://localhost:3000
 ```
 
 **Web** (`apps/web/.env.local`):
@@ -329,6 +339,28 @@ Copy from `apps/engine/env.sample` and `apps/web/env.sample`.
 6. **Database changes:** ALWAYS use Supabase migrations (`supabase/migrations/*.sql`). Never modify schema manually.
 
 7. **After schema changes:** Run `npm run update-types` to regenerate TypeScript types.
+
+## Testing
+
+Engine tests use Vitest with coverage thresholds (80% lines/functions, 75% branches):
+
+**Test structure** (`apps/engine/tests/`):
+- `unit/` - Pure logic tests (deck, hand evaluation, action processing)
+- `integration/` - Database integration tests
+- `fixtures/` - Test data and helper functions
+- `setup.ts` - Global test setup
+
+**Running specific tests:**
+```bash
+npm run test:unit --workspace apps/engine              # Unit tests only
+npx vitest run tests/unit/dealHand.test.ts --workspace apps/engine  # Single file
+npm run test:watch --workspace apps/engine             # Watch mode
+npm run test:coverage --workspace apps/engine          # Coverage report
+```
+
+**Test aliases:**
+- `@/` → `apps/engine/src/`
+- `@tests/` → `apps/engine/tests/`
 
 ## Known Limitations / TODOs
 

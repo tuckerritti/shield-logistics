@@ -1,7 +1,7 @@
 import express, { type Request, type Response } from "express";
 import cors from "cors";
 import { z } from "zod";
-import { port, corsOrigin } from "./env.js";
+import { port, corsAllowAll, corsOrigins } from "./env.js";
 import { logger } from "./logger.js";
 import { supabase } from "./supabase.js";
 import {
@@ -40,7 +40,7 @@ app.use((req, res, next) => {
 
 app.use(
   cors({
-    origin: corsOrigin === "*" ? true : corsOrigin,
+    origin: corsAllowAll ? true : corsOrigins,
     methods: ["GET", "POST", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
