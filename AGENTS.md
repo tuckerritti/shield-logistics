@@ -26,13 +26,6 @@ npm run lint --workspace apps/web     # Web lint only
 npm run format                        # Format code with Prettier
 npm run format:check                  # Check formatting without writing
 
-# Testing
-npm run test                          # Run all tests (Turbo)
-npm run test --workspace apps/engine  # Run engine tests (Vitest)
-npm run test:watch --workspace apps/engine  # Watch mode
-npm run test:coverage --workspace apps/engine  # Coverage report
-npm run test:unit --workspace apps/engine  # Unit tests only
-
 # Supabase
 npm run update-types                  # Generate TypeScript types from local Supabase
 supabase db reset                     # Reset local DB and apply migrations
@@ -297,8 +290,7 @@ const cards = playerHand.cards as unknown as string[];
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ENGINE_PORT=3001
-NODE_ENV=development
-ENGINE_CORS_ORIGIN=http://localhost:3000
+CORS_ORIGIN=http://localhost:3000
 ```
 
 **Web** (`apps/web/.env.local`):
@@ -337,28 +329,6 @@ Copy from `apps/engine/env.sample` and `apps/web/env.sample`.
 6. **Database changes:** ALWAYS use Supabase migrations (`supabase/migrations/*.sql`). Never modify schema manually.
 
 7. **After schema changes:** Run `npm run update-types` to regenerate TypeScript types.
-
-## Testing
-
-Engine tests use Vitest with coverage thresholds (80% lines/functions, 75% branches):
-
-**Test structure** (`apps/engine/tests/`):
-- `unit/` - Pure logic tests (deck, hand evaluation, action processing)
-- `integration/` - Database integration tests
-- `fixtures/` - Test data and helper functions
-- `setup.ts` - Global test setup
-
-**Running specific tests:**
-```bash
-npm run test:unit --workspace apps/engine              # Unit tests only
-npx vitest run tests/unit/dealHand.test.ts --workspace apps/engine  # Single file
-npm run test:watch --workspace apps/engine             # Watch mode
-npm run test:coverage --workspace apps/engine          # Coverage report
-```
-
-**Test aliases:**
-- `@/` → `apps/engine/src/`
-- `@tests/` → `apps/engine/tests/`
 
 ## Known Limitations / TODOs
 
