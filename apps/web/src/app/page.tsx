@@ -126,14 +126,14 @@ export default function Home() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-tokyo-night p-4">
+    <div className="flex min-h-screen items-center justify-center bg-royal-blue p-4">
       <main className="w-full max-w-4xl">
         <div className="mb-6 sm:mb-8 text-center">
           <h1
-            className="mb-2 text-4xl sm:text-6xl font-bold text-cream-parchment glow-gold"
-            style={{ fontFamily: "Cinzel, serif" }}
+            className="mb-2 text-3xl sm:text-5xl font-semibold text-cream-parchment tracking-[0.18em]"
+            style={{ fontFamily: "Lato, sans-serif" }}
           >
-            DEGEN POKER
+            SHIELD LOGISTICS LLC
           </h1>
         </div>
 
